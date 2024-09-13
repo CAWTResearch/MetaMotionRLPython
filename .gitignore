@@ -1,3 +1,4 @@
+.gitignore/
 .metawear/
 .vscode/
 example_pena.py
