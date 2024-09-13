@@ -1,0 +1,7 @@
+.metawear/
+.vscode/
+example_pena.py
+stream_data_and_save.py
+stream_sampling_local.py
+streaming_main.py
+timer_save.py
