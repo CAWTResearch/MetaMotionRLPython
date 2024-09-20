@@ -11,6 +11,15 @@ import time
 sensor_data = []
 states = []  # Aquí se almacenan las instancias de State
 
+# Definicion del manejador ISR
+def handler_timer(signum, frame):
+    # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
+    print("Interrupcion")
+
+# Configuracion del manejador ISR
+signal.signal(signal.SIGALRM, handler_timer)
+signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
+
 class State:
     def __init__(self, device):
         self.device = device
