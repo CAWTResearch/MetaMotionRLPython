@@ -14,7 +14,8 @@ states = []  # Aquí se almacenan las instancias de State
 # Definicion del manejador ISR
 def handler_timer(signum, frame):
     # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
-    print("Interrupcion")
+    a = 1
+    #print("Interrupcion")
 
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
@@ -56,19 +57,29 @@ class State:
     def print_sensor_data(self):
         # Imprimir si todas las mediciones (quaternion, acc, gyro, mag) están presentes
         if None not in self.latest_data:
-            print(f"Timestamp: {self.latest_data[0]}, Quaternion: {self.latest_data[1:5]}, "
+            print(f"Sensor: {self.device.address}, Timestamp: {self.latest_data[0]}, Quaternion: {self.latest_data[1:5]}, "
                   f"Acc: {self.latest_data[5:8]}, Gyro: {self.latest_data[8:11]}, Mag: {self.latest_data[11:14]}")
 
-def connect_and_configure_sensors(sensor_addresses):
+def connect_sensors(sensor_addresses):
     global states
     for address in sensor_addresses:
         d = MetaWear(address)
         d.connect()
-        print("Connected to " + d.address + " over " + ("USB" if d.usb.is_connected else "BLE"))
-        state = State(d)
-        states.append(state)
+        if d.is_connected:
+            print("Connected to " + d.address + " over " + ("USB" if d.usb.is_connected else "BLE"))
+            state = State(d)
+            states.append(state)
+        else:
+            print("Failed to connect to " + d.address)
+            sys.exit(1)  # Exit if any sensor fails to connect
+    
+    return states
 
-        print("Configuring device")
+def configure_and_subscribe_sensors(states):
+    for state in states:
+        d = state.device
+        print("Configuring device " + d.address)
+
         libmetawear.mbl_mw_settings_set_connection_parameters(d.board, 7.5, 7.5, 0, 6000)
         sleep(1.5)
 
@@ -147,7 +158,11 @@ def main():
 
     sensor_addresses = sys.argv[1:]
 
-    states = connect_and_configure_sensors(sensor_addresses)
+    # Paso 1: Conectar sensores
+    states = connect_sensors(sensor_addresses)
+
+    # Paso 2: Configurar y suscribir solo si todos los sensores se conectaron correctamente
+    configure_and_subscribe_sensors(states)
     
     def signal_handler(sig, frame):
         print("\nCtrl+C detected, disconnecting sensors...")
