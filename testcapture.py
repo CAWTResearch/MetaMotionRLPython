@@ -8,19 +8,18 @@ import signal
 import time
 
 # Variables globales para los datos de sensores
-sensor_data = []
 states = []  # Aquí se almacenan las instancias de State
 
 # Definicion del manejador ISR
 def handler_timer(signum, frame):
-    # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
+    # Aquí se procesan los datos más recientes de cada sensor
     for state in states:
         latest_data = state.get_latest_data()
         print(f"Datos más recientes del sensor {state.device.address}: {latest_data}")
 
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
-signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
+signal.setitimer(signal.ITIMER_REAL, 0.5, 0.5)  # Interrupción cada 20ms
 
 class State:
     def __init__(self, device):
@@ -52,8 +51,8 @@ class State:
         self.latest_data[11:14] = [mag.x, mag.y, mag.z]
 
     def get_latest_data(self):
-        # Devolver los datos más recientes de timestamp, quaternion, acc, gyro, y mag
-        return{
+        # Devuelve los datos más recientes de quaternion, acc, gyro, y mag
+        return {
             'timestamp': self.latest_data[0],
             'quaternion': self.latest_data[1:5],
             'acc': self.latest_data[5:8],
@@ -157,24 +156,19 @@ def main():
         print("Usage: python3 stream_sensors.py [mac1] [mac2] ... [mac(n)]")
         sys.exit(1)
 
+    # Conectar y configurar los sensores
     sensor_addresses = sys.argv[1:]
-
-    # Paso 1: Conectar sensores
     states = connect_sensors(sensor_addresses)
-
-    # Paso 2: Configurar y suscribir solo si todos los sensores se conectaron correctamente
     configure_and_subscribe_sensors(states)
-    
-    def signal_handler(sig, frame):
-        print("\nCtrl+C detected, disconnecting sensors...")
+
+    # Mantener la ejecución hasta que el usuario presione Ctrl+C
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt detected. Disconnecting sensors...")
         disconnect_sensors(states)
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-
-    print("Streaming data... Press Ctrl+C to stop.")
-    while True:
-        time.sleep(5)  # Mantener viva la ejecución del hilo principal
+        print("Terminating program...")
 
 if __name__ == "__main__":
     main()
