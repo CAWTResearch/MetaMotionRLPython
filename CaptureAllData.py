@@ -16,7 +16,7 @@ def handler_timer(signum, frame):
     # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
     for state in states:
         latest_data = state.get_latest_data()
-        print(f"Datos más recientes del sensor {state.device.address}: {latest_data}")
+        print(f"Datos más recientes del sensor {state.device.address}: {latest_data}") #
 
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
