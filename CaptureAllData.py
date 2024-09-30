@@ -6,6 +6,7 @@ import platform
 import sys
 import signal
 import time
+import csv, os
 
 # Variables globales para los datos de sensores
 sensor_data = []
@@ -16,7 +17,38 @@ def handler_timer(signum, frame):
     # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
     for state in states:
         latest_data = state.get_latest_data()
-        print(f"Datos más recientes del sensor {state.device.address}: {latest_data}") #
+        state.samples += 1
+        
+        # Verificar que no haya datos vacíos (None) en la lectura actual
+        if None not in latest_data['quaternion'] and None not in latest_data['acc'] and None not in latest_data['gyro'] and None not in latest_data['mag']:
+            # Nombre del archivo CSV basado en la dirección MAC
+            file_name = f"sensor_data_{state.device.address}.csv"
+
+            # Verificar si el archivo existe, si no, escribir el encabezado
+            file_exists = os.path.isfile(file_name)
+
+            # Escribir datos en el archivo CSV
+            with open(file_name, mode='a', newline='') as file:
+                writer = csv.writer(file)
+                
+                # Si el archivo no existe, escribimos los encabezados
+                if not file_exists:
+                    writer.writerow([
+                        'timestamp', 
+                        'quat_w', 'quat_x', 'quat_y', 'quat_z', 
+                        'acc_x', 'acc_y', 'acc_z', 
+                        'gyro_x', 'gyro_y', 'gyro_z', 
+                        'mag_x', 'mag_y', 'mag_z'
+                    ])
+                
+                # Escribir los datos reales
+                writer.writerow([
+                    latest_data['timestamp'], 
+                    *latest_data['quaternion'], 
+                    *latest_data['acc'], 
+                    *latest_data['gyro'], 
+                    *latest_data['mag']
+                ])
 
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
@@ -37,7 +69,7 @@ class State:
         timestamp = time.time()
         self.latest_data[0] = timestamp
         self.latest_data[1:5] = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
-        self.samples += 1
+        # self.samples += 1
 
     def acc_handler(self, ctx, data):
         acc = parse_value(data)
@@ -61,19 +93,28 @@ class State:
             'mag': self.latest_data[11:14]
         }
 
-def connect_sensors(sensor_addresses):
+def connect_sensors(sensor_addresses,  max_retries=5):
     global states
     for address in sensor_addresses:
-        d = MetaWear(address)
-        d.connect()
-        if d.is_connected:
-            print("Connected to " + d.address + " over " + ("USB" if d.usb.is_connected else "BLE"))
-            state = State(d)
-            states.append(state)
-        else:
-            print("Failed to connect to " + d.address)
-            sys.exit(1)  # Exit if any sensor fails to connect
-    
+        connected = False
+        for attempt in range(max_retries):
+            try:
+                d = MetaWear(address)
+                d.connect()
+                if d.is_connected:
+                    print(f"Connected to {d.address}")
+                    state = State(d)
+                    states.append(state)
+                    connected = True
+                    break
+                else:
+                    print(f"Failed to connect to {d.address}")
+            except Exception as e:
+                print(f"Connection attempt {attempt + 1} to {address} failed: {e}")
+            sleep(2)  # Espera antes de reintentar
+        if not connected:
+            print(f"Could not connect to sensor {address} after {max_retries} attempts.")
+            sys.exit(1)  # Salir si algún sensor no se conecta
     return states
 
 def configure_and_subscribe_sensors(states):
@@ -147,6 +188,8 @@ def disconnect_sensors(states):
 
         libmetawear.mbl_mw_debug_disconnect(state.device.board)
         print("Disconnected from " + state.device.address)
+
+        sleep(1)
 
     print("Total Samples Received")
     for state in states:
