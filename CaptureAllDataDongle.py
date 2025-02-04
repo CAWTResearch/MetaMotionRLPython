@@ -129,28 +129,44 @@ class State:
             # 'quaternion': self.latest_data[10:14]
         }
 
-def connect_sensors(sensor_addresses,  max_retries=5):
+def assign_sensors_to_dongles(sensor_addresses, dongles):
+    """
+    Asigna sensores a dongles de manera equitativa, máximo 2 sensores por dongle.
+    """
+    dongle_assignments = {dongle: [] for dongle in dongles}
+    
+    for i, sensor in enumerate(sensor_addresses):
+        dongle = dongles[i % len(dongles)]  # Asignación circular
+        dongle_assignments[dongle].append(sensor)
+    
+    return dongle_assignments
+
+def connect_sensors(sensor_addresses, dongles, max_retries=5):
     global states
-    for address in sensor_addresses:
-        connected = False
-        for attempt in range(max_retries):
-            try:
-                d = MetaWear(address)
-                d.connect()
-                if d.is_connected:
-                    print(f"Connected to {d.address}")
-                    state = State(d)
-                    states.append(state)
-                    connected = True
-                    break
-                else:
-                    print(f"Failed to connect to {d.address}")
-            except Exception as e:
-                print(f"Connection attempt {attempt + 1} to {address} failed: {e}")
-            sleep(2)  # Espera antes de reintentar
-        if not connected:
-            print(f"Could not connect to sensor {address} after {max_retries} attempts.")
-            sys.exit(1)  # Salir si algún sensor no se conecta
+    dongle_assignments = assign_sensors_to_dongles(sensor_addresses, dongles)
+    
+    for dongle, sensors in dongle_assignments.items():
+        print(f"Using dongle {dongle} for sensors: {sensors}")
+        for address in sensors:
+            connected = False
+            for attempt in range(max_retries):
+                try:
+                    d = MetaWear(address, hci_mac=dongle)  # Conexión específica al dongle
+                    d.connect()
+                    if d.is_connected:
+                        print(f"Connected to {d.address} via dongle {dongle}")
+                        state = State(d)
+                        states.append(state)
+                        connected = True
+                        break
+                    else:
+                        print(f"Failed to connect to {d.address} via {dongle}")
+                except Exception as e:
+                    print(f"Connection attempt {attempt + 1} to {address} via {dongle} failed: {e}")
+                sleep(2)  # Espera antes de reintentar
+            if not connected:
+                print(f"Could not connect to sensor {address} after {max_retries} attempts.")
+                sys.exit(1)  # Salir si algún sensor no se conecta
     return states
 
 def configure_and_subscribe_sensors(states):
@@ -232,16 +248,14 @@ def disconnect_sensors(states):
         print("%s -> %d" % (state.device.address, state.samples))
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 stream_sensors.py [mac1] [mac2] ... [mac(n)]")
+    if len(sys.argv) < 7:  # 5 sensores + 3 dongles
+        print("Usage: python3 stream_sensors.py [mac_sensor1] ... [mac_sensor5] [mac_dongle1] [mac_dongle2] [mac_dongle3]")
         sys.exit(1)
 
-    sensor_addresses = sys.argv[1:]
+    sensor_addresses = sys.argv[1:6]
+    dongles = sys.argv[6:9]
 
-    # Paso 1: Conectar sensores
-    states = connect_sensors(sensor_addresses)
-
-    # Paso 2: Configurar y suscribir solo si todos los sensores se conectaron correctamente
+    states = connect_sensors(sensor_addresses, dongles)
     configure_and_subscribe_sensors(states)
     
     def signal_handler(sig, frame):
