@@ -1,5 +1,5 @@
+# Use pyquaternion library with math library doesn't work 
 from pyquaternion import Quaternion 
-
 
 quat_1 = Quaternion(0.707, 0, 0, 0.707)
 quat_2 = Quaternion(0.707, 0, 0, 0.707)
