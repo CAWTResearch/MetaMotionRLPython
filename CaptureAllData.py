@@ -72,7 +72,6 @@ def handler_timer(signum, frame):
                 #     *latest_data['quaternion']
                 # ])
 
-
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
 signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
