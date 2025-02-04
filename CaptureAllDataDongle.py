@@ -7,10 +7,63 @@ import sys
 import signal
 import time, datetime
 import csv, os
+import subprocess
 
 # Variables globales para los datos de sensores
 sensor_data = []
 states = []  # Aquí se almacenan las instancias de State
+
+# Definir direcciones MAC de sensores y dongles directamente en el código
+sensor_addresses = [
+    "EE:1B:72:FA:BF:E8",
+    "F1:1E:E2:6F:1D:E1",
+    "CE:94:48:FE:5D:C5",
+    "F9:8C:1E:4A:F5:D0",
+    "FA:F1:20:99:CB:B4"
+]
+
+dongles = [
+    "00:E0:5C:48:06:BD",
+    "00:E0:5C:48:01:34",
+    "00:E0:5C:48:03:93"
+]
+
+def force_disconnect_sensors():
+    print("Escaneando y desconectando sensores en todos los dongles...")
+
+    try:
+        # Verificar qué dongles están disponibles
+        result = subprocess.run(["hcitool", "dev"], capture_output=True, text=True)
+        dongles = [line.split()[1] for line in result.stdout.splitlines() if "hci" in line]
+
+        if not dongles:
+            print("No se detectaron dongles Bluetooth. Verifica que estén conectados.")
+            return
+        
+        print(f"Dongles detectados: {dongles}")
+
+        # Obtener todos los dispositivos conectados
+        result = subprocess.run(["hcitool", "con"], capture_output=True, text=True)
+        connections = result.stdout.splitlines()
+
+        for line in connections:
+            if "handle" in line:
+                parts = line.split()
+                mac_address = parts[2]  # Extraer MAC Address del sensor
+                print(f"Desconectando {mac_address} en todos los dongles...")
+
+                # Intentar desconectar el dispositivo en cada dongle
+                for dongle in dongles:
+                    subprocess.run(["bluetoothctl", "disconnect", mac_address], capture_output=True, text=True)
+                    subprocess.run(["bluetoothctl", "remove", mac_address], capture_output=True, text=True)
+
+        # Habilitar Bluetooth en caso de que estuviera bloqueado
+        subprocess.run(["rfkill", "unblock", "bluetooth"])
+        print("Todos los sensores han sido desconectados correctamente.")
+        sleep(2)
+
+    except Exception as e:
+        print(f"Error al desconectar sensores: {e}")
 
 # Definicion del manejador ISR
 def handler_timer(signum, frame):
@@ -20,7 +73,6 @@ def handler_timer(signum, frame):
         state.samples += 1
         
         # Verificar que no haya datos vacíos (None) en la lectura actual
-        # if None not in latest_data['quaternion'] and None not in latest_data['acc'] and None not in latest_data['gyro'] and None not in latest_data['mag']:
         if None not in latest_data['quaternion'] and None not in latest_data['acc'] and None not in latest_data['gyro']:
             # Nombre del archivo CSV basado en la dirección MAC
             file_name = f"sensor_data_{state.device.address}.csv"
@@ -42,10 +94,6 @@ def handler_timer(signum, frame):
                         'acc_x', 'acc_y', 'acc_z', 
                         'gyro_x', 'gyro_y', 'gyro_z' 
                         # 'mag_x', 'mag_y', 'mag_z' 
-                        # 'acc_x', 'acc_y', 'acc_z', 
-                        # 'gyro_x', 'gyro_y', 'gyro_z', 
-                        # 'mag_x', 'mag_y', 'mag_z',
-                        # 'quat_w', 'quat_x', 'quat_y', 'quat_z'
                     ])
                 
                 # Obtener el tiempo actual en formato HH:MM:SS
@@ -62,16 +110,6 @@ def handler_timer(signum, frame):
                     *latest_data['gyro'] 
                     # *latest_data['mag']
                 ])
-                # # Data Kevin
-                # writer.writerow([
-                #     current_time,
-                #     latest_data['timestamp'],  
-                #     *latest_data['acc'], 
-                #     *latest_data['gyro'], 
-                #     *latest_data['mag'],
-                #     *latest_data['quaternion']
-                # ])
-
 
 # Configuracion del manejador ISR
 signal.signal(signal.SIGALRM, handler_timer)
@@ -81,39 +119,30 @@ class State:
     def __init__(self, device):
         self.device = device
         self.samples = 0
-        self.latest_data = [None] * 11  # 14 posiciones: timestamp + quaternion + acc + gyro + mag
+        self.latest_data = [None] * 11  # 11 posiciones: timestamp + quaternion + acc + gyro
         self.quaternion_callback = FnVoid_VoidP_DataP(self.quaternion_handler)
         self.acc_callback = FnVoid_VoidP_DataP(self.acc_handler)
         self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_handler)
         # self.mag_callback = FnVoid_VoidP_DataP(self.mag_handler)
-        # self.acc_callback = FnVoid_VoidP_DataP(self.acc_handler)
-        # self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_handler)
-        # self.mag_callback = FnVoid_VoidP_DataP(self.mag_handler)
-        # self.quaternion_callback = FnVoid_VoidP_DataP(self.quaternion_handler)
     
     def quaternion_handler(self, ctx, data):
         quaternion = parse_value(data)
         timestamp = time.time()
         self.latest_data[0] = timestamp
         self.latest_data[1:5] = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
-        # self.latest_data[10:14] = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
-        # print(self.latest_data[10:14])
         # self.samples += 1
 
     def acc_handler(self, ctx, data):
         acc = parse_value(data)
         self.latest_data[5:8] = [acc.x, acc.y, acc.z]
-        # self.latest_data[1:4] = [acc.x, acc.y, acc.z]
 
     def gyro_handler(self, ctx, data):
         gyro = parse_value(data)
         self.latest_data[8:11] = [gyro.x, gyro.y, gyro.z]
-        # self.latest_data[4:7] = [gyro.x, gyro.y, gyro.z]
 
     # def mag_handler(self, ctx, data):
     #     mag = parse_value(data)
     #     self.latest_data[11:14] = [mag.x, mag.y, mag.z]
-    #     # self.latest_data[7:10] = [mag.x, mag.y, mag.z]
 
     def get_latest_data(self):
         # Devolver los datos más recientes de timestamp, quaternion, acc, gyro, y mag
@@ -123,10 +152,6 @@ class State:
             'acc': self.latest_data[5:8],
             'gyro': self.latest_data[8:11]
             # 'mag': self.latest_data[11:14]
-            # 'acc': self.latest_data[1:4],
-            # 'gyro': self.latest_data[4:7],
-            # 'mag': self.latest_data[7:10],
-            # 'quaternion': self.latest_data[10:14]
         }
 
 def assign_sensors_to_dongles(sensor_addresses, dongles):
@@ -248,13 +273,7 @@ def disconnect_sensors(states):
         print("%s -> %d" % (state.device.address, state.samples))
 
 def main():
-    if len(sys.argv) < 7:  # 5 sensores + 3 dongles
-        print("Usage: python3 stream_sensors.py [mac_sensor1] ... [mac_sensor5] [mac_dongle1] [mac_dongle2] [mac_dongle3]")
-        sys.exit(1)
-
-    sensor_addresses = sys.argv[1:6]
-    dongles = sys.argv[6:9]
-
+    force_disconnect_sensors()
     states = connect_sensors(sensor_addresses, dongles)
     configure_and_subscribe_sensors(states)
     
