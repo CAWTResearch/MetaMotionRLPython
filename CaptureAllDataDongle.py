@@ -1,6 +1,7 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
+from mbientlab.metawear.cbindings import FnVoid_VoidP_VoidP
 from time import sleep
 import platform
 import sys
@@ -15,17 +16,19 @@ states = []  # Aquí se almacenan las instancias de State
 
 # Definir direcciones MAC de sensores y dongles directamente en el código
 sensor_addresses = [
-    "EE:1B:72:FA:BF:E8",
-    "F1:1E:E2:6F:1D:E1",
-    "CE:94:48:FE:5D:C5",
-    "F9:8C:1E:4A:F5:D0",
-    "FA:F1:20:99:CB:B4"
+    # "EE:1B:72:FA:BF:E8"
+    # "F1:1E:E2:6F:1D:E1",
+    # "CE:94:48:FE:5D:C5"
+    "F7:68:55:8D:84:0E"
+    # "F9:8C:1E:4A:F5:D0",
+    # "FA:F1:20:99:CB:B4"
 ]
 
 dongles = [
-    "00:E0:5C:48:06:BD",
-    "00:E0:5C:48:01:34",
-    "00:E0:5C:48:03:93"
+    # "00:E0:5C:48:06:BD",
+    # "00:E0:5C:48:01:34",
+    # "00:E0:5C:48:03:93"
+    "3C:0A:F3:10:17:F0"
 ]
 
 def force_disconnect_sensors():
@@ -73,7 +76,7 @@ def handler_timer(signum, frame):
         state.samples += 1
         
         # Verificar que no haya datos vacíos (None) en la lectura actual
-        if None not in latest_data['quaternion'] and None not in latest_data['acc'] and None not in latest_data['gyro']:
+        if None not in latest_data['quaternion']:
             # Nombre del archivo CSV basado en la dirección MAC
             file_name = f"sensor_data_{state.device.address}.csv"
 
@@ -91,9 +94,6 @@ def handler_timer(signum, frame):
                         'time',
                         'timestamp', 
                         'quat_w', 'quat_x', 'quat_y', 'quat_z', 
-                        'acc_x', 'acc_y', 'acc_z', 
-                        'gyro_x', 'gyro_y', 'gyro_z' 
-                        # 'mag_x', 'mag_y', 'mag_z' 
                     ])
                 
                 # Obtener el tiempo actual en formato HH:MM:SS
@@ -106,23 +106,17 @@ def handler_timer(signum, frame):
                     current_time2,
                     latest_data['timestamp'], 
                     *latest_data['quaternion'], 
-                    *latest_data['acc'], 
-                    *latest_data['gyro'] 
-                    # *latest_data['mag']
-                ])
 
-# Configuracion del manejador ISR
-signal.signal(signal.SIGALRM, handler_timer)
-signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
+                ])
 
 class State:
     def __init__(self, device):
         self.device = device
         self.samples = 0
-        self.latest_data = [None] * 11  # 11 posiciones: timestamp + quaternion + acc + gyro
+        self.latest_data = [None] * 5  # 11 posiciones: timestamp + quaternion + acc + gyro
         self.quaternion_callback = FnVoid_VoidP_DataP(self.quaternion_handler)
-        self.acc_callback = FnVoid_VoidP_DataP(self.acc_handler)
-        self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_handler)
+        # self.acc_callback = FnVoid_VoidP_DataP(self.acc_handler)
+        # self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_handler)
         # self.mag_callback = FnVoid_VoidP_DataP(self.mag_handler)
     
     def quaternion_handler(self, ctx, data):
@@ -132,13 +126,13 @@ class State:
         self.latest_data[1:5] = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
         # self.samples += 1
 
-    def acc_handler(self, ctx, data):
-        acc = parse_value(data)
-        self.latest_data[5:8] = [acc.x, acc.y, acc.z]
+    # def acc_handler(self, ctx, data):
+    #     acc = parse_value(data)
+    #     self.latest_data[5:8] = [acc.x, acc.y, acc.z]
 
-    def gyro_handler(self, ctx, data):
-        gyro = parse_value(data)
-        self.latest_data[8:11] = [gyro.x, gyro.y, gyro.z]
+    # def gyro_handler(self, ctx, data):
+    #     gyro = parse_value(data)
+    #     self.latest_data[8:11] = [gyro.x, gyro.y, gyro.z]
 
     # def mag_handler(self, ctx, data):
     #     mag = parse_value(data)
@@ -149,8 +143,8 @@ class State:
         return{
             'timestamp': self.latest_data[0],
             'quaternion': self.latest_data[1:5],
-            'acc': self.latest_data[5:8],
-            'gyro': self.latest_data[8:11]
+            # 'acc': self.latest_data[5:8],
+            # 'gyro': self.latest_data[8:11]
             # 'mag': self.latest_data[11:14]
         }
 
@@ -199,7 +193,7 @@ def configure_and_subscribe_sensors(states):
         d = state.device
         print("Configuring device " + d.address)
 
-        libmetawear.mbl_mw_settings_set_connection_parameters(d.board, 7.5, 7.5, 0, 6000)
+        libmetawear.mbl_mw_settings_set_connection_parameters(d.board, 30.0, 50.0, 0, 4000)
         sleep(1.5)
 
         # Configuración de Sensor Fusion
@@ -212,13 +206,13 @@ def configure_and_subscribe_sensors(states):
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(d.board, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, state.quaternion_callback)
 
-        # Suscripción a acelerómetro
-        signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(d.board)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_acc, None, state.acc_callback)
+        # # Suscripción a acelerómetro
+        # signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(d.board)
+        # libmetawear.mbl_mw_datasignal_subscribe(signal_acc, None, state.acc_callback)
 
-        # Suscripción a giroscopio
-        signal_gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(d.board)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_gyro, None, state.gyro_callback)
+        # # Suscripción a giroscopio
+        # signal_gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(d.board)
+        # libmetawear.mbl_mw_datasignal_subscribe(signal_gyro, None, state.gyro_callback)
 
         # # Suscripción a magnetómetro
         # signal_mag = libmetawear.mbl_mw_mag_bmm150_get_b_field_data_signal(d.board)
@@ -226,13 +220,13 @@ def configure_and_subscribe_sensors(states):
 
         # Habilitar y comenzar a obtener datos de todos los sensores
         libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
-        libmetawear.mbl_mw_acc_enable_acceleration_sampling(d.board)
-        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(d.board)
+        # libmetawear.mbl_mw_acc_enable_acceleration_sampling(d.board)
+        # libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(d.board)
         # libmetawear.mbl_mw_mag_bmm150_enable_b_field_sampling(d.board)
 
         libmetawear.mbl_mw_sensor_fusion_start(d.board)
-        libmetawear.mbl_mw_acc_start(d.board)
-        libmetawear.mbl_mw_gyro_bmi160_start(d.board)
+        # libmetawear.mbl_mw_acc_start(d.board)
+        # libmetawear.mbl_mw_gyro_bmi160_start(d.board)
         # libmetawear.mbl_mw_mag_bmm150_start(d.board)
     
     return states
@@ -243,24 +237,24 @@ def disconnect_sensors(states):
 
         # Stop signals
         libmetawear.mbl_mw_sensor_fusion_stop(state.device.board)
-        libmetawear.mbl_mw_acc_stop(state.device.board)
-        libmetawear.mbl_mw_gyro_bmi160_stop(state.device.board)
+        # libmetawear.mbl_mw_acc_stop(state.device.board)
+        # libmetawear.mbl_mw_gyro_bmi160_stop(state.device.board)
         # libmetawear.mbl_mw_mag_bmm150_stop(state.device.board)
 
         # Disable signals
-        libmetawear.mbl_mw_acc_disable_acceleration_sampling(state.device.board)
-        libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(state.device.board)
+        # libmetawear.mbl_mw_acc_disable_acceleration_sampling(state.device.board)
+        # libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(state.device.board)
         # libmetawear.mbl_mw_mag_bmm150_disable_b_field_sampling(state.device.board)
 
         # Unsubscribe signals
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(state.device.board, SensorFusionData.QUATERNION)
-        signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(state.device.board)
-        signal_gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(state.device.board)
+        # signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(state.device.board)
+        # signal_gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(state.device.board)
         # signal_mag = libmetawear.mbl_mw_mag_bmm150_get_b_field_data_signal(state.device.board)
 
         libmetawear.mbl_mw_datasignal_unsubscribe(signal_quat)
-        libmetawear.mbl_mw_datasignal_unsubscribe(signal_acc)
-        libmetawear.mbl_mw_datasignal_unsubscribe(signal_gyro)
+        # libmetawear.mbl_mw_datasignal_unsubscribe(signal_acc)
+        # libmetawear.mbl_mw_datasignal_unsubscribe(signal_gyro)
         # libmetawear.mbl_mw_datasignal_unsubscribe(signal_mag)
 
         libmetawear.mbl_mw_debug_disconnect(state.device.board)
@@ -272,12 +266,23 @@ def disconnect_sensors(states):
     for state in states:
         print("%s -> %d" % (state.device.address, state.samples))
 
+def on_disconnect(ctx, board):
+    print("Lost connection, attempting to reconnect…")
+    # tear down your state for this device, then:
+    board.connect(board.address, board.hci_mac)
+
+
 def main():
     force_disconnect_sensors()
     states = connect_sensors(sensor_addresses, dongles)
     configure_and_subscribe_sensors(states)
+
+    # Configuracion del manejador ISR
+    signal.signal(signal.SIGALRM, handler_timer)
+    signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
     
     def signal_handler(sig, frame):
+        signal.setitimer(signal.ITIMER_REAL, 0, 0)
         print("\nCtrl+C detected, disconnecting sensors...")
         disconnect_sensors(states)
         sys.exit(0)
