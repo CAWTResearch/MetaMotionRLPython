@@ -1,27 +1,47 @@
+#!/usr/bin/env python3
 import pandas as pd
 import matplotlib.pyplot as plt
+import sys
 
-# 1) Read CSV (header row contains the column names)
-df = pd.read_csv(
-    'acc_gyro_F768558D840E.csv', 
-    header=0,          
-)
+def main(csv_path):
+    # 1) Load the CSV, let pandas infer the columns
+    df = pd.read_csv(csv_path, header=0)
+    
+    # 2) Identify the time‐column (first one)
+    time_col = df.columns[0]
 
-# 2) Convert epoch_ms (milliseconds since Unix epoch) to datetime
-df['time'] = pd.to_datetime(df['epoch_ms'], unit='ms')
+    # 3) Parse that column as datetime
+    df[time_col] = pd.to_datetime(
+        df[time_col],
+        format='%Y-%m-%d %H:%M:%S.%f',
+        errors='raise'
+    )
+    
+    # 4) Rename it to a uniform name and set as index
+    df.rename(columns={time_col: 'time'}, inplace=True)
+    df.set_index('time', inplace=True)
 
-# 3) Set the new datetime column as the DataFrame index
-df.set_index('time', inplace=True)
+    # 5) Inspect
+    print("Index set to:", df.index.name)
+    print("Data columns:", df.columns.tolist())
+    print(df.head())
 
-# 4) (Optional) Inspect the DataFrame
-print(df.columns.tolist())
-print(df.head())
+    # 6) Plot all remaining columns
+    fig, ax = plt.subplots(figsize=(12, 5))
+    df.plot(y=df.columns.tolist(), ax=ax)
+    ax.set_title(f"{', '.join(df.columns)} vs. Time")
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Value")
+    plt.tight_layout()
+    plt.show()
 
-# 5) Plot accelerometer channels vs. time
-fig, ax = plt.subplots(figsize=(12, 5))
-df[['acc_x', 'acc_y', 'acc_z']].plot(ax=ax)
-ax.set_title("Acceleration vs. Time")
-ax.set_xlabel("Time")
-ax.set_ylabel("Acceleration (g)")
-plt.tight_layout()
-plt.show()
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python plotlog.py <path_to_csv>")
+        sys.exit(1)
+    main(sys.argv[1])
+
+
+# Run: python3 plotlog.py acc_D542DDACBEE1.csv 
+# Run: python3 plotlog.py gyro_D542DDACBEE1.csv 
+
