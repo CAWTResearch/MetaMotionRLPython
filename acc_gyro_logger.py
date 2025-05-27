@@ -13,7 +13,7 @@ from mbientlab.metawear.cbindings import (
 from ctypes import cast, POINTER, c_void_p, byref
 import platform
 import signal
-import time, threading
+import time, threading, termios, tty
 from datetime import datetime
 
 from threading  import Event
@@ -145,6 +145,16 @@ def connect_sensors(sensor_addresses, dongles, max_retries=5):
                 sys.exit(1)  # Salir si algún sensor no se conecta
     return states
 
+def wait_key():
+    """Block until any key is pressed."""
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
 def configure_and_log_sensors(states):
     for state in states:
         d = state.device
@@ -196,7 +206,7 @@ def configure_and_log_sensors(states):
         libmetawear.mbl_mw_gyro_bmi270_start(d.board)
         
         print("Logging data for 10s")
-        sleep(5.0)
+        wait_key()
     
         print("Stop logging")
         libmetawear.mbl_mw_logging_stop(d.board)
