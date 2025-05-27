@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 cols = [
-    'time','timestamp','quat_w','quat_x','quat_y','quat_z',
+    'time','timestamp','acc_x','acc_y','acc_z',
 ]
 
 # 1) Read with the first row as header
@@ -23,7 +23,8 @@ print(df.columns.tolist())
 print(df.head())
 
 fig, ax = plt.subplots(figsize=(12, 5))
-df[['acc_x','acc_y','acc_z','gyro_x', 'gyro_y', 'gyro_z']].plot(ax=ax)
+df[['acc_x','acc_y','acc_z']].plot(ax=ax)
+# df[['acc_x','acc_y','acc_z','gyro_x', 'gyro_y', 'gyro_z']].plot(ax=ax)
 ax.set_title("acc_gyro vs. Time")
 ax.set_xlabel("Time")
 ax.set_ylabel("Acc_gyro")
