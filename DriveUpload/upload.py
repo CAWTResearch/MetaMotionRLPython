@@ -26,4 +26,4 @@ def upload_photo(file_path):
 
 upload_photo("NewData.csv")
 print("File uploaded successfully.")
-print('See Google Drive for the uploaded file. Bye!')
+print('See Google Drive for the uploaded files')
