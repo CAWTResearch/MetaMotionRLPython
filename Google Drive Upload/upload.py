@@ -25,3 +25,4 @@ def upload_photo(file_path):
     ).execute()
 
 upload_photo("NewData.csv")
+print("File uploaded successfully.")
