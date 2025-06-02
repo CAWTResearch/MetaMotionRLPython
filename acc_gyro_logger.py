@@ -190,10 +190,6 @@ def configure_and_log_sensors(states):
 
         state.logger = [acc_logger, gyro_logger]
 
-
-        libmetawear.mbl_mw_logging_start(board, 0)
-
-
         print("Start logging")
         libmetawear.mbl_mw_logging_start(d.board, 0)
         
@@ -271,53 +267,6 @@ def configure_and_log_sensors(states):
         # close files
         acc_csv.close()
         gyro_csv.close()
-
-
-        # # Prepare CSV file for this device
-        # csv_filename = f"acc_gyro_{d.address.replace(':','')}.csv"
-        # file_exists = os.path.isfile(csv_filename)
-        # csv_file = open(csv_filename, 'a', newline='')
-        # csv_writer = csv.writer(csv_file)
-        # if not file_exists:
-        #     csv_writer.writerow([
-        #         'epoch_ms', 'acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z'
-        #     ])
-
-        # e = Event()
-
-        # print("CSV prepared")
-
-        # def progress_update_handler(context, entries_left, total_entries):
-        #     if (entries_left == 0):
-        #         e.set()
-
-        # fn_wrapper = FnVoid_VoidP_UInt_UInt(progress_update_handler)
-        
-        # # Create a download handler that calls our progress callback
-        # download_handler = LogDownloadHandler(
-        #     context = None,
-        #     received_progress_update = fn_wrapper,
-        #     # we won’t use unknown or unhandled entry callbacks
-        #     received_unknown_entry = cast(None, FnVoid_VoidP_UByte_Long_UByteP_UByte),
-        #     received_unhandled_entry = cast(None, FnVoid_VoidP_DataP)
-
-        # )
-
-        # # This callback writes each sample to CSV
-        # def download_data_handler(ctx, entry):
-        #     val = parse_value(entry)
-        #     epoch = entry.contents.epoch
-        #     # assuming an accel signal log: val.x, val.y, val.z
-        #     csv_writer.writerow([epoch, val.x, val.y, val.z, val.x, val.y, val.z])
-        # callback = FnVoid_VoidP_DataP(download_data_handler)
-
-        # # subscribe our writer-callback to the logger
-        # libmetawear.mbl_mw_logger_subscribe(state.logger, None, callback)
-        # # kick off the download process (the '0' is for default settings)
-        # libmetawear.mbl_mw_logging_download(d.board, 0, byref(download_handler))
-        # e.wait()
-
-        # csv_file.close()
     
     return states
 
@@ -360,7 +309,7 @@ def main():
         state.on_disconnect = lambda status: e.set()
         print("Debug reset")
         libmetawear.mbl_mw_debug_reset(state.device.board)
-        e.wait()
+        wait_key()
         print("debugged")
 
     disconnect_sensors(states)

@@ -10,7 +10,7 @@ import subprocess, time, datetime, os, csv, signal, sys
 # Sensor y dongle MACs
 device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1"]
 # dongle_macs = ["3C:0A:F3:10:17:F0"]
-dongle_macs = ["D8:3A:DD:EA:0C:EF"]
+dongle_macs = ["D8:3A:DD:EA:0C:EF","","",""]
 states = []
 
 # Asegura desconexión previa

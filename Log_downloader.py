@@ -1,25 +1,24 @@
+# usage: python3 log_acc.py [mac]
 from __future__ import print_function
-from mbientlab.metawear import MetaWear, libmetawear, parse_value
+from mbientlab.metawear import MetaWear, libmetawear, parse_value, create_voidp
 from mbientlab.metawear.cbindings import *
+from time import sleep
 from mbientlab.metawear.cbindings import (
+    AccBmi270Odr, AccBoschRange,
+    GyroBoschOdr, GyroBoschRange,
     LogDownloadHandler,
     FnVoid_VoidP_DataP,
     FnVoid_VoidP_UInt_UInt,
-    FnVoid_VoidP_VoidP_VoidP_UInt,
     FnVoid_VoidP_UByte_Long_UByteP_UByte
 )
-from time import sleep
-from ctypes import cast, POINTER, c_void_p, byref
-import platform
-import sys
-import signal
-import time, datetime, threading
+from ctypes import cast, byref
+from datetime import datetime
+import threading, time, csv, os, sys, termios, tty
 from threading  import Event
-import csv, os
 import subprocess
 
 # Variables globales para los datos de sensores
-acc_gyro_data = []
+acc_data = []
 states = []  # Aquí se almacenan las instancias de State
 
 # Definir direcciones MAC de sensores y dongles directamente en el código
@@ -29,9 +28,6 @@ sensor_addresses = [
 ]
 
 dongles = [
-    # "00:E0:5C:48:06:BD",
-    # "00:E0:5C:48:01:34",
-    # "00:E0:5C:48:03:93"
     "3C:0A:F3:10:17:F0"
 ]
 
@@ -72,52 +68,13 @@ def force_disconnect_sensors():
     except Exception as e:
         print(f"Error al desconectar sensores: {e}")
 
-# Definicion del manejador ISR
-def handler_timer(signum, frame):
-    # Aqui se van a guardar los datos que contiene el vector de 14 posiciones en un arreglo
-    for state in states:
-        latest_data = state.get_latest_data()
-        state.samples += 1
-        
-        # Verificar que no haya datos vacíos (None) en la lectura actual
-        if None not in latest_data['acc']:
-            # Nombre del archivo CSV basado en la dirección MAC
-            file_name = f"acc_gyro_{state.device.address}.csv"
-
-            # Verificar si el archivo existe, si no, escribir el encabezado
-            file_exists = os.path.isfile(file_name)
-
-            # Escribir datos en el archivo CSV
-            with open(file_name, mode='a', newline='') as file:
-                writer = csv.writer(file)
-                
-                # Si el archivo no existe, escribimos los encabezados
-                if not file_exists:
-                    writer.writerow([
-                        # 'time',
-                        'time',
-                        'timestamp', 
-                        'acc_x', 'acc_y', 'acc_z', 'gyro_x', 'gyro_y', 'gyro_z', 
-                    ])
-                
-                # Obtener el tiempo actual en formato HH:MM:SS
-                current_time2 = datetime.datetime.now().strftime('%H:%M:%S.%f')[:-4]  # Usamos [: -4] para truncar a dos dígitos en milisegundos
-
-                # Escribir los datos reales
-                writer.writerow([
-                    # current_time,
-                    current_time2,
-                    latest_data['timestamp'], 
-                    *latest_data['acc'], 
-                    *latest_data['gyro'] 
-                ])
-    
 class State:
     def __init__(self, device):
         self.device = device
         self.samples = 0
         self.latest_data = [None] * 6  # 11 posiciones: timestamp + quaternion + acc + gyro
         self.acc_callback = FnVoid_VoidP_DataP(self.acc_data_handler)
+        self.logger = None
         self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_data_handler)
         # self.mag_callback = FnVoid_VoidP_DataP(self.mag_handler)
 
@@ -180,41 +137,121 @@ def connect_sensors(sensor_addresses, dongles, max_retries=5):
                 sys.exit(1)  # Salir si algún sensor no se conecta
     return states
 
-def configure_and_subscribe_sensors(states):
-    for state in states:
-        d = state.device
-        print("Configuring device " + d.address)
+def wait_key():
+    """Block until any key is pressed."""
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
-        libmetawear.mbl_mw_settings_set_connection_parameters(d.board, 30.0, 50.0, 0, 4000)
-        sleep(1.5)
 
-        # Setup acc
-        libmetawear.mbl_mw_acc_bmi270_set_odr(d.board, AccBmi270Odr._50Hz) # BMI 270 specific call
-        libmetawear.mbl_mw_acc_bosch_set_range(d.board, AccBoschRange._4G)
-        libmetawear.mbl_mw_acc_write_acceleration_config(d.board)
+def configure_and_log_with_periodic_download(state, download_interval=2.0):
+    d     = state.device
+    board = d.board
 
-        # signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(d.board)
-        # logger = create_voidp(lambda fn: libmetawear.mbl_mw_datasignal_log(signal, None, fn), resource = "acc_logger")
+    # --- 1) sensor config & logger setup ---
+    libmetawear.mbl_mw_acc_bmi270_set_odr(board, AccBmi270Odr._50Hz)
+    libmetawear.mbl_mw_acc_bosch_set_range(board, AccBoschRange._4G)
+    libmetawear.mbl_mw_acc_write_acceleration_config(board)
 
-        # setup gyro
-        libmetawear.mbl_mw_gyro_bmi270_set_range(d.board, GyroBoschRange._1000dps);
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(d.board, GyroBoschOdr._50Hz);
-        libmetawear.mbl_mw_gyro_bmi270_write_config(d.board);
+    libmetawear.mbl_mw_gyro_bmi270_set_odr(board, GyroBoschOdr._50Hz)
+    libmetawear.mbl_mw_gyro_bmi270_set_range(board, GyroBoschRange._1000dps)
+    libmetawear.mbl_mw_gyro_bmi270_write_config(board)
 
-        # Suscripción a acelerómetro
-        signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(d.board)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_acc, None, state.acc_callback)
-        libmetawed = state.device
-        # Habilitar y comenzar a obtener datos de todos los sensores
-        libmetawear.mbl_mw_acc_enable_acceleration_sampling(d.board)
-        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(d.board)
-        signal_gyro = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(d.board)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_gyro, None, state.gyro_callback)
+    sig_acc  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(board)
+    sig_gyro = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(board)
 
-        libmetawear.mbl_mw_acc_start(d.board)
-        libmetawear.mbl_mw_gyro_bmi270_start(d.board)
-    
-    return states
+    acc_logger = create_voidp(lambda cb:
+        libmetawear.mbl_mw_datasignal_log(sig_acc, None, cb),
+        resource="acc_logger"
+    )
+    gyro_logger = create_voidp(lambda cb:
+        libmetawear.mbl_mw_datasignal_log(sig_gyro, None, cb),
+        resource="gyro_logger"
+    )
+    state.logger = (acc_logger, gyro_logger)
+
+    libmetawear.mbl_mw_logging_start(board, 0)
+    libmetawear.mbl_mw_acc_enable_acceleration_sampling(board)
+    libmetawear.mbl_mw_acc_start(board)
+    libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(board)
+    libmetawear.mbl_mw_gyro_bmi270_start(board)
+
+    # --- 2) open CSVs & subscribe download callbacks ---
+    mac_clean = d.address.replace(":", "")
+    acc_f  = open(f"acc_{mac_clean}.csv",  "a", newline="")
+    gyro_f = open(f"gyro_{mac_clean}.csv","a", newline="")
+    acc_w  = csv.writer(acc_f)
+    gyro_w = csv.writer(gyro_f)
+    if os.stat(acc_f.name).st_size == 0:
+        acc_w.writerow(["timestamp","acc_x","acc_y","acc_z"])
+    if os.stat(gyro_f.name).st_size == 0:
+        gyro_w.writerow(["timestamp","gyro_x","gyro_y","gyro_z"])
+
+    def on_acc_download(ctx, entry):
+        val = parse_value(entry)
+        ts  = datetime.now().isoformat(timespec="milliseconds")
+        acc_w.writerow([ts, val.x, val.y, val.z])
+        acc_f.flush()
+
+    def on_gyro_download(ctx, entry):
+        val = parse_value(entry)
+        ts  = datetime.now().isoformat(timespec="milliseconds")
+        gyro_w.writerow([ts, val.x, val.y, val.z])
+        gyro_f.flush()
+
+    cb_acc = FnVoid_VoidP_DataP(on_acc_download)
+    cb_gyro= FnVoid_VoidP_DataP(on_gyro_download)
+    libmetawear.mbl_mw_logger_subscribe(acc_logger, None, cb_acc)
+    libmetawear.mbl_mw_logger_subscribe(gyro_logger, None, cb_gyro)
+
+    # --- 3) set up download handler & progress event ---
+    download_done = threading.Event()
+    def prog(ctx, left, total):
+        if left == 0:
+            download_done.set()
+    fn_prog = FnVoid_VoidP_UInt_UInt(prog)
+    handler = LogDownloadHandler(
+        context=None,
+        received_progress_update=fn_prog,
+        received_unknown_entry=cast(None, FnVoid_VoidP_UByte_Long_UByteP_UByte),
+        received_unhandled_entry=cast(None, FnVoid_VoidP_DataP)
+    )
+
+    # --- 4) downloader thread ---
+    stop_download = threading.Event()
+    def downloader_loop():
+        while not stop_download.is_set():
+            download_done.clear()
+            libmetawear.mbl_mw_logging_download(board, 0, byref(handler))
+            # wait until this chunk is done (or timeout)
+            download_done.wait(timeout=download_interval + 1)
+            time.sleep(download_interval)
+
+    t = threading.Thread(target=downloader_loop, daemon=True)
+    t.start()
+
+    print("Logging & downloading in background — press any key to stop")
+    wait_key()
+    stop_download.set()
+    t.join()
+
+    # --- 5) clean up logger & CSVs ---
+    libmetawear.mbl_mw_logging_stop(board)
+    libmetawear.mbl_mw_logging_flush_page(board)
+    libmetawear.mbl_mw_logging_clear_entries(board)
+    libmetawear.mbl_mw_acc_stop(board)
+    libmetawear.mbl_mw_gyro_bmi270_stop(board)
+    libmetawear.mbl_mw_datasignal_unsubscribe(state.logger[0])
+    libmetawear.mbl_mw_datasignal_unsubscribe(state.logger[1])
+    acc_f.close()
+    gyro_f.close()
+
+    print("Finished logging + downloading for", d.address)
+
 
 def disconnect_sensors(states):
     for state in states:
@@ -247,23 +284,12 @@ def disconnect_sensors(states):
 def main():
     force_disconnect_sensors()
     states = connect_sensors(sensor_addresses, dongles)
-    configure_and_subscribe_sensors(states)
+    for st in states:
+        configure_and_log_with_periodic_download(st, download_interval=2.0)
+        libmetawear.mbl_mw_debug_reset_after_gc(st.device.board)
+        sleep(1.0)
 
-    # Configuracion del manejador ISR
-    signal.signal(signal.SIGALRM, handler_timer)
-    signal.setitimer(signal.ITIMER_REAL, 0.02, 0.02)
-    
-    def signal_handler(sig, frame):
-        signal.setitimer(signal.ITIMER_REAL, 0, 0)
-        print("\nCtrl+C detected, disconnecting sensors...")
-        disconnect_sensors(states)
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
-
-    print("Streaming data... Press Ctrl+C to stop.")
-    while True:
-        time.sleep(5)  # Mantener viva la ejecución del hilo principal
+    disconnect_sensors(states)
 
 if __name__ == "__main__":
     main()
