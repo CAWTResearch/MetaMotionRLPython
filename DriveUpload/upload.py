@@ -1,4 +1,3 @@
-#pip install google-api-python-client
 from googleapiclient.discovery import build
 from google.oauth2 import service_account
 
@@ -23,13 +22,19 @@ def authenticate():
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return creds
 
-def upload_photo(file_path):
-    creds = authenticate()
-    service = build('drive', 'v3', credentials=creds)
-
+def create_subfolder(service, name, parent_id):
     file_metadata = {
-        'name' : file_path,
-        'parents' : [PARENT_FOLDER_ID]
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_id]
+    }
+    folder = service.files().create(body=file_metadata, fields='id').execute()
+    return folder.get('id')
+
+def upload_photo(service, file_path, folder_id):
+    file_metadata = {
+        'name': os.path.basename(file_path),
+        'parents': [folder_id]
     }
 
     file = service.files().create(
@@ -41,14 +46,22 @@ def print_devices():
     print("Sensors:", device_macs)
     print("Dongles:", dongle_macs)
 
+def upload_all_files():
+    creds = authenticate()
+    service = build('drive', 'v3', credentials=creds)
+
+    # Create a subfolder with a timestamp or custom name
+    import datetime
+    subfolder_name = "Upload_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
+
+    # Upload files to the new subfolder
+    for device in device_macs:
+        upload_photo(service, 'acc_' + device + '.csv', subfolder_id)
+        upload_photo(service, 'gyro_' + device + '.csv', subfolder_id)
+
 if __name__ == "__main__":
     print_devices()
-
-def upload_all_files():
-    for device in device_macs:
-        upload_photo('acc_' + device + '.csv')
-        upload_photo('gyro_' + device + '.csv')
-
-upload_all_files()
-print("File uploaded successfully.")
-print('See Google Drive for the uploaded files')
+    upload_all_files()
+    print("Files uploaded successfully.")
+    print("See Google Drive for the uploaded files.")
