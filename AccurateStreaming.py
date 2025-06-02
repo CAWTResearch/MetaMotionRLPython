@@ -37,18 +37,30 @@ def force_disconnect_sensors():
 class State:
     def __init__(self, device):
         self.device = device
-        base_dir = "DriveUpload"
+        base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
         os.makedirs(base_dir, exist_ok=True)
+
+        # 2) Construct full, absolute paths to the two CSVs inside DriveUpload/
         self.acc_file  = os.path.join(base_dir, f"acc_{device.address}.csv")
         self.gyro_file = os.path.join(base_dir, f"gyro_{device.address}.csv")
-        # Headers: full-precision human timestamps k
-        if not os.path.isfile(self.gyro_file):
-            with open(self.gyro_file, 'w', newline='') as f:
-                csv.writer(f).writerow([
-                    'host_time', 'sensor_time',
-                    'gyro_x', 'gyro_y', 'gyro_z'
-                ])
-        # Callbacks
+
+        # 3) If acc_file already exists, delete it; then (re)create with header
+        if os.path.isfile(self.acc_file):
+            os.remove(self.acc_file)
+        with open(self.acc_file, 'w', newline='') as f:
+            csv.writer(f).writerow([
+                'host_time', 'sensor_time',
+                'acc_x', 'acc_y', 'acc_z'
+            ])
+
+        # 4) Do the same for gyro_file
+        if os.path.isfile(self.gyro_file):
+            os.remove(self.gyro_file)
+        with open(self.gyro_file, 'w', newline='') as f:
+            csv.writer(f).writerow([
+                'host_time', 'sensor_time',
+                'gyro_x', 'gyro_y', 'gyro_z'
+            ])
         self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
 
