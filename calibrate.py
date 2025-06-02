@@ -1,6 +1,5 @@
 # usage: python3 calibrate.py [mac]
 # This example is showing how to calibrate the sensor fusion on the metawear
-# Example taken of MetaWear Documentation
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
 from time import sleep
