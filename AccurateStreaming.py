@@ -149,6 +149,11 @@ def disconnect_sensors():
         time.sleep(1)
     print("All disconnected")
 
+def on_disconnect(ctx, board):
+    print("Lost connection, attempting to reconnect…")
+    # tear down your state for this device, then:
+    board.connect(board.address, board.hci_mac)
+    
 # Main loop
 if __name__ == '__main__':
     force_disconnect_sensors()
