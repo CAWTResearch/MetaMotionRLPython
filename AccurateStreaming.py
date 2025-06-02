@@ -8,7 +8,7 @@ from mbientlab.metawear.cbindings import (
 import subprocess, time, datetime, os, csv, signal, sys
 
 # Sensor y dongle MACs
-device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1"]
+device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1", "E6:AC:5E:B8:4C:D9", "F0:3D:E7:ED:F6:F7", "E6:4F:B9:D7:18:7C", "CE:5A:39:E6:8F:B3"]
 # dongle_macs = ["3C:0A:F3:10:17:F0"]
 dongle_macs = ["00:E0:5C:48:00:2F","00:E0:5C:48:03:93","00:E0:5C:48:06:BD"]
 states = []
@@ -38,15 +38,11 @@ def force_disconnect_sensors():
 class State:
     def __init__(self, device):
         self.device = device
-        self.acc_file  = f"acc_{device.address}.csv"
-        self.gyro_file = f"gyro_{device.address}.csv"
-        # Headers: full-precision human timestamps only
-        if not os.path.isfile(self.acc_file):
-            with open(self.acc_file, 'w', newline='') as f:
-                csv.writer(f).writerow([
-                    'host_time', 'sensor_time',
-                    'acc_x', 'acc_y', 'acc_z'
-                ])
+        base_dir = "DriveUpload"
+        os.makedirs(base_dir, exist_ok=True)
+        self.acc_file  = os.path.join(base_dir, f"acc_{device.address}.csv")
+        self.gyro_file = os.path.join(base_dir, f"gyro_{device.address}.csv")
+        # Headers: full-precision human timestamps k
         if not os.path.isfile(self.gyro_file):
             with open(self.gyro_file, 'w', newline='') as f:
                 csv.writer(f).writerow([
