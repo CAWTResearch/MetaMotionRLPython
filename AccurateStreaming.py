@@ -178,5 +178,8 @@ if __name__ == '__main__':
         sys.exit(0)
     signal.signal(signal.SIGINT, on_exit)
     print("Streaming 50 Hz to separate acc_/gyro_ CSVs...")
-    while True:
-        time.sleep(1)
+    while time.sleep(60.0):
+        print("\n60 segundos transcurridos. Deteniendo streaming...")
+        disconnect_sensors()
+        sys.exit(0)
+
