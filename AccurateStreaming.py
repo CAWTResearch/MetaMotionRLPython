@@ -13,7 +13,7 @@ device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1", "F0:3D:E7:ED:F6:F7", "F8
 dongle_macs = ['00:E0:5C:48:01:63', '00:E0:5C:48:06:BD',  'D8:3A:DD:EA:0C:EF']
 states = []
 # Asegura desconexión previa
-STREAM_DURATION = 30
+STREAM_DURATION = 60
 
 def force_disconnect_sensors():
     try:
