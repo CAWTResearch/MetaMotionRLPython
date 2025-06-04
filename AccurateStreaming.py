@@ -201,7 +201,7 @@ def disconnect_sensors():
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
 
         print("Debug reset")
-        libmetawear.mbl_mw_debug_reset(state.device.board)
+        libmetawear.mbl_mw_debug_reset(st.device.board)
         time.sleep(2.0)
         print("debugged")
 
