@@ -5,7 +5,7 @@ import os
 def detect_data_loss(csv_file_path, expected_rate):
     df = pd.read_csv(csv_file_path)
     df['sensor_time'] = pd.to_datetime(df['sensor_time'], format='%H:%M:%S.%f')
-    df['second_interval'] = df['sensor_time'].dt.floor('S')
+    df['second_interval'] = df['sensor_time'].dt.floor('s')
     first_second = df['second_interval'].min()
     last_second = df['second_interval'].max()
     
@@ -50,13 +50,13 @@ def plot_data_loss_bar_chart(data_loss_results):
     plt.bar(files, losses, color='skyblue')
     plt.xticks(rotation=45, ha='right')
     plt.ylabel('Muestras perdidas')
-    plt.title('Pérdida de datos por archivo CSV')
+    plt.suptitle('Pérdida de datos por archivo CSV')
+    plt.title('Pérdida Promedio: ' + str(Average_total_loss))
     plt.tight_layout()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.text(0.5, 6, Average_total_loss, f'Pérdida promedio: {Average_total_loss:.2f}')
     plt.show()
 
 if __name__ == "__main__":
-    folder = "./your_csv_folder"  # Reemplaza con la ruta de tu carpeta
+    folder = "./1m6SensorFirstPermutation"  # Reemplaza con la ruta de tu carpeta
     results = analyze_folder(folder, expected_rate=50)
     plot_data_loss_bar_chart(results)
