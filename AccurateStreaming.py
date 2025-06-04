@@ -199,6 +199,8 @@ def disconnect_sensors():
         gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
+        
+    for st in states:
 
         print("Debug reset")
         libmetawear.mbl_mw_debug_reset(st.device.board)
