@@ -161,71 +161,32 @@ def configure_and_subscribe_sensors(states):
 
 def disconnect_sensors():
     for st in states:
-        board = st.device.board
-        dev   = st.device
+        b = st.device.board
 
-        # 1) Unsubscribe from ACC and GYRO first
-        try:
-            sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(board)
-            libmetawear.mbl_mw_datasignal_unsubscribe(sig_a)
-        except Exception:
-            pass
-        time.sleep(0.2)
+        # 1) Stop accel sampling
+        libmetawear.mbl_mw_acc_stop(b)
+        libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
 
-        try:
-            sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(board)
-            libmetawear.mbl_mw_datasignal_unsubscribe(sig_g)
-        except Exception:
-            pass
-        time.sleep(0.2)
+        # 2) Stop gyro sampling
+        libmetawear.mbl_mw_gyro_bmi270_stop(b)
+        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
 
-        # 2) Stop & disable ACC
-        for _ in range(2):
-            try:
-                libmetawear.mbl_mw_acc_stop(board)
-                break
-            except Exception:
-                time.sleep(0.2)
-        time.sleep(0.2)
+        # 3) Unsubscribe from accel signal
+        acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+        libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
 
-        for _ in range(2):
-            try:
-                libmetawear.mbl_mw_acc_disable_acceleration_sampling(board)
-                break
-            except Exception:
-                time.sleep(0.2)
-        time.sleep(0.2)
+        # 4) Unsubscribe from gyro signal
+        gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
 
-        # 3) Stop & disable GYRO
-        for _ in range(2):
-            try:
-                libmetawear.mbl_mw_gyro_bmi270_stop(board)
-                break
-            except Exception:
-                time.sleep(0.2)
-        time.sleep(0.2)
+        # 5) Finally, disconnect over BLE
+        libmetawear.mbl_mw_debug_disconnect(b)
 
-        for _ in range(2):
-            try:
-                libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(board)
-                break
-            except Exception:
-                time.sleep(0.2)
-        time.sleep(0.2)
-
-        # 4) Now disconnect via the Python wrapper (not raw debug_disconnect)
-        try:
-            dev.disconnect()
-        except Exception:
-            time.sleep(0.2)
-            try:
-                dev.disconnect()
-            except:
-                pass
-
-        time.sleep(0.2)
+        # Give the board a moment to process each step
+        time.sleep(1.0)
 
     print("All disconnected")
+
 
 
 
