@@ -27,7 +27,7 @@ def detect_data_loss(csv_file_path, expected_rate):
     actual_total_samples = counts_filtered['sample_count'].sum()
     total_samples_lost = expected_total_samples - actual_total_samples
 
-    return os.path.basename(csv_file_path), total_samples_lost
+    return os.path.basename(csv_file_path), total_samples_lost, expected_total_samples
 
 def analyze_folder(folder_path, expected_rate=50):
     data_loss_results = []
@@ -35,23 +35,27 @@ def analyze_folder(folder_path, expected_rate=50):
     for filename in os.listdir(folder_path):
         if filename.endswith(".csv"):
             filepath = os.path.join(folder_path, filename)
-            file_label, lost_samples = detect_data_loss(filepath, expected_rate)
-            data_loss_results.append((file_label, lost_samples))
+            file_label, lost_samples, expected_samples = detect_data_loss(filepath, expected_rate)
+            data_loss_results.append((file_label, lost_samples, expected_samples))
 
     return data_loss_results
 
 def plot_data_loss_bar_chart(data_loss_results):
     files = [item[0] for item in data_loss_results]
     losses = [item[1] for item in data_loss_results]
+    expected_samples = [item[2] for item in data_loss_results]
 
-    Average_total_loss = sum(losses)/len(losses) if losses else 0
+    total_loss = sum(losses)
+    total_expected_samples = sum(expected_samples)
+
+    Porcentaje_Data = (total_expected_samples - total_loss)/ total_expected_samples
 
     plt.figure(figsize=(12, 6))
     plt.bar(files, losses, color='skyblue')
     plt.xticks(rotation=45, ha='right')
     plt.ylabel('Muestras perdidas')
     plt.suptitle('Pérdida de datos por archivo CSV')
-    plt.title('Pérdida Promedio: ' + str(Average_total_loss))
+    plt.title('Porcentaje de Data: ' + str(Porcentaje_Data))
     plt.tight_layout()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.show()
