@@ -219,7 +219,7 @@ def on_disconnect(ctx, board):
     
 # Main loop
 if __name__ == '__main__':
-    # force_disconnect_sensors()
+    force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
 
@@ -250,7 +250,6 @@ if __name__ == '__main__':
 
     # f) Timer done → clean up & dump
     for state in states:
-        state.on_disconnect = lambda status: e.set()
         print("Debug reset")
         libmetawear.mbl_mw_debug_reset(state.device.board)
         time.sleep(2.0)
