@@ -157,21 +157,38 @@ def configure_and_subscribe_sensors(states):
         libmetawear.mbl_mw_gyro_bmi270_start(b)
 
 # Desconexión limpia
+# Replace your old disconnect_sensors() with this:
+
 def disconnect_sensors():
     for st in states:
         b = st.device.board
-        libmetawear.mbl_mw_acc_stop(b)
-        libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
-        libmetawear.mbl_mw_gyro_bmi270_stop(b)
-        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
-        # unsubscribe
+
+        # 1) Unsubscribe from both signals before trying to stop them:
         sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
-        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
         libmetawear.mbl_mw_datasignal_unsubscribe(sig_a)
+        time.sleep(0.1)
+
+        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
         libmetawear.mbl_mw_datasignal_unsubscribe(sig_g)
+        time.sleep(0.1)
+
+        # 2) Now stop & disable each sensor in turn, with a slight delay:
+        libmetawear.mbl_mw_acc_stop(b)
+        time.sleep(0.1)
+        libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
+        time.sleep(0.1)
+
+        libmetawear.mbl_mw_gyro_bmi270_stop(b)
+        time.sleep(0.1)
+        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+        time.sleep(0.1)
+
+        # 3) Finally, tell the board to disconnect over BLE:
         libmetawear.mbl_mw_debug_disconnect(b)
-        time.sleep(1)
+        time.sleep(0.1)
+
     print("All disconnected")
+
 
 def on_disconnect(ctx, board):
     print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
