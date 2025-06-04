@@ -225,6 +225,7 @@ def on_disconnect(ctx, board):
 # Main loop
 if __name__ == '__main__':
     force_disconnect_sensors()
+    time.sleep(1.0)
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
 
