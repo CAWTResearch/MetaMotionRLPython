@@ -249,6 +249,12 @@ if __name__ == '__main__':
         pass
 
     # f) Timer done → clean up & dump
+    for state in states:
+        state.on_disconnect = lambda status: e.set()
+        print("Debug reset")
+        libmetawear.mbl_mw_debug_reset(state.device.board)
+        time.sleep(2.0)
+        print("debugged")
     disconnect_sensors()
     for st in states:
         print("dumping")
