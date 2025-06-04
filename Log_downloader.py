@@ -1,4 +1,4 @@
-# usage: python3 log_acc.py [mac]
+# usage: python3 log_acc_multiple.py
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value, create_voidp
 from mbientlab.metawear.cbindings import *
@@ -13,54 +13,44 @@ from mbientlab.metawear.cbindings import (
 )
 from ctypes import cast, byref
 from datetime import datetime
-import threading, time, csv, os, sys, termios, tty
-from threading  import Event
-import subprocess
+import threading, time, csv, os, sys, termios, tty, subprocess
+from threading import Event
 
-# Variables globales para los datos de sensores
-acc_data = []
-states = []  # Aquí se almacenan las instancias de State
-
-# Definir direcciones MAC de sensores y dongles directamente en el código
+# -----------------------------------------------------------------------------
+# 1) GLOBAL CONFIG
+# -----------------------------------------------------------------------------
 sensor_addresses = [
-    # "F7:68:55:8D:84:0E"
-    "D5:42:DD:AC:BE:E1"
+    "F8:DC:C7:F1:48:7A", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64", "F7:68:55:8D:84:0E", "E6:4F:B9:D7:18:7C"
 ]
-
 dongles = [
-    "3C:0A:F3:10:17:F0"
+    "00:E0:5C:48:03:93", "00:E0:5C:48:00:2F", "00:E0:5C:48:01:34", "90:DE:80:E1:8F:B0", "3C:0A:F3:10:17:F0"
 ]
+# Interval (seconds) between periodic download calls
+DOWNLOAD_INTERVAL = 1.0
 
+# -----------------------------------------------------------------------------
+# 2) FORCE‐DISCONNECT ANY EXISTING CONNECTIONS
+# -----------------------------------------------------------------------------
 def force_disconnect_sensors():
     print("Escaneando y desconectando sensores en todos los dongles...")
-
     try:
-        # Verificar qué dongles están disponibles
         result = subprocess.run(["hcitool", "dev"], capture_output=True, text=True)
-        dongles = [line.split()[1] for line in result.stdout.splitlines() if "hci" in line]
-
-        if not dongles:
+        dongles_list = [line.split()[1] for line in result.stdout.splitlines() if "hci" in line]
+        if not dongles_list:
             print("No se detectaron dongles Bluetooth. Verifica que estén conectados.")
             return
-        
-        print(f"Dongles detectados: {dongles}")
 
-        # Obtener todos los dispositivos conectados
+        print(f"Dongles detectados: {dongles_list}")
         result = subprocess.run(["hcitool", "con"], capture_output=True, text=True)
-        connections = result.stdout.splitlines()
-
-        for line in connections:
+        for line in result.stdout.splitlines():
             if "handle" in line:
                 parts = line.split()
-                mac_address = parts[2]  # Extraer MAC Address del sensor
+                mac_address = parts[2]
                 print(f"Desconectando {mac_address} en todos los dongles...")
-
-                # Intentar desconectar el dispositivo en cada dongle
-                for dongle in dongles:
+                for dongle in dongles_list:
                     subprocess.run(["bluetoothctl", "disconnect", mac_address], capture_output=True, text=True)
                     subprocess.run(["bluetoothctl", "remove", mac_address], capture_output=True, text=True)
 
-        # Habilitar Bluetooth en caso de que estuviera bloqueado
         subprocess.run(["rfkill", "unblock", "bluetooth"])
         print("Todos los sensores han sido desconectados correctamente.")
         sleep(2)
@@ -68,77 +58,231 @@ def force_disconnect_sensors():
     except Exception as e:
         print(f"Error al desconectar sensores: {e}")
 
+# -----------------------------------------------------------------------------
+# 3) STATE CLASS: holds per‐sensor logger & CSV handles + stop flags
+# -----------------------------------------------------------------------------
 class State:
     def __init__(self, device):
         self.device = device
-        self.samples = 0
-        self.latest_data = [None] * 6  # 11 posiciones: timestamp + quaternion + acc + gyro
-        self.acc_callback = FnVoid_VoidP_DataP(self.acc_data_handler)
-        self.logger = None
-        self.gyro_callback = FnVoid_VoidP_DataP(self.gyro_data_handler)
-        # self.mag_callback = FnVoid_VoidP_DataP(self.mag_handler)
+        self.board = device.board
 
-    # acc callback
-    def acc_data_handler(self, ctx, data):
-        print("ACC: %s -> %s" % (self.device.address, parse_value(data)))
-        acc = parse_value(data)
-        self.latest_data[1:4] = [acc.x, acc.y, acc.z]
-                
-    # gyro callback
-    def gyro_data_handler(self, ctx, data):
-        print("GYRO: %s -> %s" % (self.device.address, parse_value(data)))
-        gyro = parse_value(data)
-        self.latest_data[4:7] = [gyro.x, gyro.y, gyro.z]
+        # We'll track the two “logger” objects returned by create_voidp(...)
+        self.acc_logger = None
+        self.gyro_logger = None
 
-    def get_latest_data(self):
-        # Devolver los datos más recientes de timestamp, quaternion, acc, gyro, y mag
-        return{
-            'timestamp': self.latest_data[0],
-            'acc': self.latest_data[1:4],
-            'gyro': self.latest_data[4:7]
-        }
+        # Threads & events for periodic download
+        self.download_thread = None
+        self.stop_download = Event()
+        self.download_done = Event()
 
+        # Open CSV files (one for accel, one for gyro)
+        base_dir = "downloadTrial"
+        os.makedirs(base_dir, exist_ok=True)
+        mac_clean = device.address.replace(":", "")
+        self.acc_path  = os.path.join(base_dir, f"acc_{mac_clean}.csv")
+        self.gyro_path = os.path.join(base_dir, f"gyro_{mac_clean}.csv")
+        os.makedirs(os.path.dirname(self.acc_path) or ".", exist_ok=True)
+
+        # Open in “append” mode
+        self.acc_f  = open(self.acc_path,  "a", newline="")
+        self.gyro_f = open(self.gyro_path, "a", newline="")
+        self.acc_w  = csv.writer(self.acc_f)
+        self.gyro_w = csv.writer(self.gyro_f)
+
+        # If new file, write header
+        if os.stat(self.acc_path).st_size == 0:
+            self.acc_w.writerow(["host_time", "sensor_time", "acc_x", "acc_y", "acc_z"])
+        if os.stat(self.gyro_path).st_size == 0:
+            self.gyro_w.writerow(["host_time", "sensor_time", "gyro_x", "gyro_y", "gyro_z"])
+
+        # Prepare callbacks for logger‐subscribe
+        self.cb_acc  = FnVoid_VoidP_DataP(self.on_acc_download)
+        self.cb_gyro = FnVoid_VoidP_DataP(self.on_gyro_download)
+
+    def on_acc_download(self, ctx, entry):
+        # Don’t write if the file is already closed:
+        if self.acc_f.closed:
+            return
+        val = parse_value(entry)
+        sensor_time = datetime.fromtimestamp(entry.contents.epoch / 1000.0) \
+                             .strftime('%H:%M:%S.%f')
+        host_time = datetime.now().strftime('%H:%M:%S.%f')
+        self.acc_w.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self.acc_f.flush()
+
+    def on_gyro_download(self, ctx, entry):
+        # Don’t write if the file is already closed:
+        if self.gyro_f.closed:
+            return
+        val = parse_value(entry)
+        sensor_time = datetime.fromtimestamp(entry.contents.epoch / 1000.0) \
+                             .strftime('%H:%M:%S.%f')
+        host_time = datetime.now().strftime('%H:%M:%S.%f')
+        self.gyro_w.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self.gyro_f.flush()
+
+    def start_loggers(self):
+        b = self.board
+
+        # --- Configure accelerometer ---
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
+        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
+        libmetawear.mbl_mw_acc_write_acceleration_config(b)
+
+        # --- Configure gyroscope ---
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
+        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+
+        # Retrieve data signals
+        sig_acc  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+        sig_gyro = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+
+        # Create “logger” for each
+        self.acc_logger = create_voidp(lambda cb: 
+            libmetawear.mbl_mw_datasignal_log(sig_acc, None, cb),
+            resource="acc_logger"
+        )
+        self.gyro_logger = create_voidp(lambda cb:
+            libmetawear.mbl_mw_datasignal_log(sig_gyro, None, cb),
+            resource="gyro_logger"
+        )
+
+        # Subscribe callbacks (will be invoked during download)
+        libmetawear.mbl_mw_logger_subscribe(self.acc_logger, None, self.cb_acc)
+        libmetawear.mbl_mw_logger_subscribe(self.gyro_logger, None, self.cb_gyro)
+
+        # Finally start flash‐logging on the board
+        libmetawear.mbl_mw_logging_start(b, 0)
+        libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
+        libmetawear.mbl_mw_acc_start(b)
+        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi270_start(b)
+
+        print(f"[{self.device.address}] Logging started.")
+
+    def _download_loop(self):
+        # Build a single LogDownloadHandler instance
+        def prog(ctx, left, total):
+            if left == 0:
+                self.download_done.set()
+
+        fn_prog = FnVoid_VoidP_UInt_UInt(prog)
+        handler = LogDownloadHandler(
+            context=None,
+            received_progress_update=fn_prog,
+            received_unknown_entry=cast(None, FnVoid_VoidP_UByte_Long_UByteP_UByte),
+            received_unhandled_entry=cast(None, FnVoid_VoidP_DataP)
+        )
+
+        while not self.stop_download.is_set():
+            # Clear event and ask for “all available pages” (0 offset)
+            self.download_done.clear()
+            libmetawear.mbl_mw_logging_download(self.board, 0, byref(handler))
+            # Wait until this download chunk finishes (or timeout)
+            self.download_done.wait(timeout=DOWNLOAD_INTERVAL + 1)
+            time.sleep(DOWNLOAD_INTERVAL)
+
+    def start_downloader(self):
+        self.download_thread = threading.Thread(
+            target=self._download_loop, daemon=True
+        )
+        self.download_thread.start()
+
+    def final_download(self, timeout=10.0):
+        """
+        Do one blocking download of all remaining flash pages, and return
+        only when left == 0 (or when timeout seconds elapse).
+        """
+        # Build a fresh LogDownloadHandler that reuses the same callbacks:
+        def prog(ctx, left, total):
+            # As soon as left == 0, we know we're done
+            if left == 0:
+                self.download_done.set()
+
+        fn_prog = FnVoid_VoidP_UInt_UInt(prog)
+        handler = LogDownloadHandler(
+            context=None,
+            received_progress_update=fn_prog,
+            received_unknown_entry=cast(None, FnVoid_VoidP_UByte_Long_UByteP_UByte),
+            received_unhandled_entry=cast(None, FnVoid_VoidP_DataP)
+        )
+
+        # Clear the event, then kick off a “download everything” call
+        self.download_done.clear()
+        libmetawear.mbl_mw_logging_download(self.board, 0, byref(handler))
+
+        # Block until either left == 0 or we hit the timeout
+        self.download_done.wait(timeout=timeout)
+
+        # At this point, either we downloaded all pages (left == 0), or timed out.
+        if not self.download_done.is_set():
+            print(f"[{self.device.address}] Warning: final_download timed out before getting all pages.")
+        else:
+            print(f"[{self.device.address}] final_download got all pages.")
+
+    def stop_and_cleanup(self):
+        b = self.board
+
+        # Stop flash logging
+        libmetawear.mbl_mw_logging_stop(b)
+        libmetawear.mbl_mw_logging_flush_page(b)
+        libmetawear.mbl_mw_logging_clear_entries(b)
+
+        # Stop sampling
+        libmetawear.mbl_mw_acc_stop(b)
+        libmetawear.mbl_mw_gyro_bmi270_stop(b)
+
+        # Close CSV handles
+        self.acc_f.close()
+        self.gyro_f.close()
+
+        print(f"[{self.device.address}] Stopped logging & downloaded all data.")
+
+    def disconnect(self):
+        # Finally disconnect over BLE
+        libmetawear.mbl_mw_debug_disconnect(self.board)
+        print(f"[{self.device.address}] Disconnected.")
+
+# -----------------------------------------------------------------------------
+# 4) CONNECT ALL SENSORS
+# -----------------------------------------------------------------------------
 def assign_sensors_to_dongles(sensor_addresses, dongles):
-    """
-    Asigna sensores a dongles de manera equitativa, máximo 2 sensores por dongle.
-    """
     dongle_assignments = {dongle: [] for dongle in dongles}
-    
     for i, sensor in enumerate(sensor_addresses):
-        dongle = dongles[i % len(dongles)]  # Asignación circular
+        dongle = dongles[i % len(dongles)]
         dongle_assignments[dongle].append(sensor)
-    
     return dongle_assignments
 
 def connect_sensors(sensor_addresses, dongles, max_retries=5):
-    global states
+    states = []
     dongle_assignments = assign_sensors_to_dongles(sensor_addresses, dongles)
     for dongle, sensors in dongle_assignments.items():
-        print(f"Using dongle {dongle} for sensors: {sensors}")
+        print(f"[+] Using dongle {dongle} for sensors: {sensors}")
         for address in sensors:
-            connected = False
             for attempt in range(max_retries):
                 try:
-                    d = MetaWear(address, hci_mac=dongle)  # Conexión específica al dongle
-                    d.connect()
-                    if d.is_connected:
-                        print(f"Connected to {d.address} via dongle {dongle}")
-                        state = State(d)
-                        states.append(state)
-                        connected = True
+                    dev = MetaWear(address, hci_mac=dongle)
+                    dev.connect()
+                    if dev.is_connected:
+                        print(f"[+] Connected to {dev.address} via {dongle}")
+                        st = State(dev)
+                        states.append(st)
                         break
                     else:
-                        print(f"Failed to connect to {d.address} via {dongle}")
+                        print(f"[-] Failed to connect to {address} on {dongle}")
                 except Exception as e:
-                    print(f"Connection attempt {attempt + 1} to {address} via {dongle} failed: {e}")
-                sleep(2)  # Espera antes de reintentar
-            if not connected:
-                print(f"Could not connect to sensor {address} after {max_retries} attempts.")
-                sys.exit(1)  # Salir si algún sensor no se conecta
+                    print(f"    Attempt {attempt+1} → {address} failed: {e}")
+                sleep(2)
+            else:
+                print(f"[!] Could not connect to sensor {address} after {max_retries} attempts")
+                sys.exit(1)
     return states
 
+# -----------------------------------------------------------------------------
+# 5) WAIT FOR KEYPRESS (shared among all sensors)
+# -----------------------------------------------------------------------------
 def wait_key():
-    """Block until any key is pressed."""
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
     try:
@@ -147,149 +291,46 @@ def wait_key():
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
 
-
-def configure_and_log_with_periodic_download(state, download_interval=2.0):
-    d     = state.device
-    board = d.board
-
-    # --- 1) sensor config & logger setup ---
-    libmetawear.mbl_mw_acc_bmi270_set_odr(board, AccBmi270Odr._50Hz)
-    libmetawear.mbl_mw_acc_bosch_set_range(board, AccBoschRange._4G)
-    libmetawear.mbl_mw_acc_write_acceleration_config(board)
-
-    libmetawear.mbl_mw_gyro_bmi270_set_odr(board, GyroBoschOdr._50Hz)
-    libmetawear.mbl_mw_gyro_bmi270_set_range(board, GyroBoschRange._1000dps)
-    libmetawear.mbl_mw_gyro_bmi270_write_config(board)
-
-    sig_acc  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(board)
-    sig_gyro = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(board)
-
-    acc_logger = create_voidp(lambda cb:
-        libmetawear.mbl_mw_datasignal_log(sig_acc, None, cb),
-        resource="acc_logger"
-    )
-    gyro_logger = create_voidp(lambda cb:
-        libmetawear.mbl_mw_datasignal_log(sig_gyro, None, cb),
-        resource="gyro_logger"
-    )
-    state.logger = (acc_logger, gyro_logger)
-
-    libmetawear.mbl_mw_logging_start(board, 0)
-    libmetawear.mbl_mw_acc_enable_acceleration_sampling(board)
-    libmetawear.mbl_mw_acc_start(board)
-    libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(board)
-    libmetawear.mbl_mw_gyro_bmi270_start(board)
-
-    # --- 2) open CSVs & subscribe download callbacks ---
-    mac_clean = d.address.replace(":", "")
-    acc_f  = open(f"acc_{mac_clean}.csv",  "a", newline="")
-    gyro_f = open(f"gyro_{mac_clean}.csv","a", newline="")
-    acc_w  = csv.writer(acc_f)
-    gyro_w = csv.writer(gyro_f)
-    if os.stat(acc_f.name).st_size == 0:
-        acc_w.writerow(["timestamp","acc_x","acc_y","acc_z"])
-    if os.stat(gyro_f.name).st_size == 0:
-        gyro_w.writerow(["timestamp","gyro_x","gyro_y","gyro_z"])
-
-    def on_acc_download(ctx, entry):
-        val = parse_value(entry)
-        ts  = datetime.now().isoformat(timespec="milliseconds")
-        acc_w.writerow([ts, val.x, val.y, val.z])
-        acc_f.flush()
-
-    def on_gyro_download(ctx, entry):
-        val = parse_value(entry)
-        ts  = datetime.now().isoformat(timespec="milliseconds")
-        gyro_w.writerow([ts, val.x, val.y, val.z])
-        gyro_f.flush()
-
-    cb_acc = FnVoid_VoidP_DataP(on_acc_download)
-    cb_gyro= FnVoid_VoidP_DataP(on_gyro_download)
-    libmetawear.mbl_mw_logger_subscribe(acc_logger, None, cb_acc)
-    libmetawear.mbl_mw_logger_subscribe(gyro_logger, None, cb_gyro)
-
-    # --- 3) set up download handler & progress event ---
-    download_done = threading.Event()
-    def prog(ctx, left, total):
-        if left == 0:
-            download_done.set()
-    fn_prog = FnVoid_VoidP_UInt_UInt(prog)
-    handler = LogDownloadHandler(
-        context=None,
-        received_progress_update=fn_prog,
-        received_unknown_entry=cast(None, FnVoid_VoidP_UByte_Long_UByteP_UByte),
-        received_unhandled_entry=cast(None, FnVoid_VoidP_DataP)
-    )
-
-    # --- 4) downloader thread ---
-    stop_download = threading.Event()
-    def downloader_loop():
-        while not stop_download.is_set():
-            download_done.clear()
-            libmetawear.mbl_mw_logging_download(board, 0, byref(handler))
-            # wait until this chunk is done (or timeout)
-            download_done.wait(timeout=download_interval + 1)
-            time.sleep(download_interval)
-
-    t = threading.Thread(target=downloader_loop, daemon=True)
-    t.start()
-
-    print("Logging & downloading in background — press any key to stop")
-    wait_key()
-    stop_download.set()
-    t.join()
-
-    # --- 5) clean up logger & CSVs ---
-    libmetawear.mbl_mw_logging_stop(board)
-    libmetawear.mbl_mw_logging_flush_page(board)
-    libmetawear.mbl_mw_logging_clear_entries(board)
-    libmetawear.mbl_mw_acc_stop(board)
-    libmetawear.mbl_mw_gyro_bmi270_stop(board)
-    libmetawear.mbl_mw_datasignal_unsubscribe(state.logger[0])
-    libmetawear.mbl_mw_datasignal_unsubscribe(state.logger[1])
-    acc_f.close()
-    gyro_f.close()
-
-    print("Finished logging + downloading for", d.address)
-
-
-def disconnect_sensors(states):
-    for state in states:
-        print("Disconnecting device " + state.device.address)
-
-        # Stop signals
-        libmetawear.mbl_mw_acc_stop(state.device.board)
-        libmetawear.mbl_mw_gyro_bmi270_stop(state.device.board)
-
-        # Disable signals
-        libmetawear.mbl_mw_acc_disable_acceleration_sampling(state.device.board)
-        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(state.device.board)
-
-        # Unsubscribe signals
-        signal_acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(state.device.board)
-        signal_gyro = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(state.device.board)
-
-        libmetawear.mbl_mw_datasignal_unsubscribe(signal_acc)
-        libmetawear.mbl_mw_datasignal_unsubscribe(signal_gyro)
-
-        libmetawear.mbl_mw_debug_disconnect(state.device.board)
-        print("Disconnected from " + state.device.address)
-
-        sleep(1)
-
-    print("Total Samples Received")
-    for state in states:
-        print("%s -> %d" % (state.device.address, state.samples))
-
+# -----------------------------------------------------------------------------
+# 6) MAIN: configure everything, start logging & downloading in parallel
+# -----------------------------------------------------------------------------
 def main():
     force_disconnect_sensors()
     states = connect_sensors(sensor_addresses, dongles)
+    # 1) For each sensor, start flash‐logging + spawn its downloader thread
     for st in states:
-        configure_and_log_with_periodic_download(st, download_interval=2.0)
-        libmetawear.mbl_mw_debug_reset_after_gc(st.device.board)
-        sleep(1.0)
+        libmetawear.mbl_mw_logging_clear_entries(st.board)
+        st.start_loggers()
+        st.start_downloader()
 
-    disconnect_sensors(states)
+    print("\nLogging + downloading on all sensors. Press any key to stop…")
+    wait_key()  # Blocks until user presses a key
+
+
+    # 2) Signal all downloader threads to stop, then join them
+    for st in states:
+        st.stop_download.set()
+    for st in states:
+        if st.download_thread is not None:
+            st.download_thread.join()
+    for st in states:
+        st.final_download(timeout=10.0)
+    # 3) Stop & clean up each sensor (stop logging, unsubscribe, close CSVs)
+    for st in states:
+        st.stop_and_cleanup()
+
+    # 4) Finally disconnect each sensor
+    for st in states:
+        print("Debug reset")
+        libmetawear.mbl_mw_debug_reset(st.device.board)
+        time.sleep(2.0)
+        print("debugged")
+
+    for st in states:
+        st.disconnect()
+        sleep(1)
+
+    print("\nAll sensors processed. Exiting.")
 
 if __name__ == "__main__":
     main()
