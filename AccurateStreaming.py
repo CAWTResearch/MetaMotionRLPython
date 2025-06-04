@@ -44,7 +44,7 @@ class State:
         os.makedirs(base_dir, exist_ok=True)
 
         # Remember each sensor's MAC (without colons) to name files
-        mac_no_colon = device.address.replace(":", "")
+        mac_no_colon = device.address
 
         # Full paths where we’ll dump at the end:
         self.acc_file  = os.path.join(base_dir, f"acc_{mac_no_colon}.csv")
@@ -212,7 +212,9 @@ if __name__ == '__main__':
     # f) Timer done → clean up & dump
     disconnect_sensors()
     for st in states:
+        print("dumping")
         st.dump_to_csv()
+        print("dumped")
         print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
         print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
 
