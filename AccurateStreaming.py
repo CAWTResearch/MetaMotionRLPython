@@ -137,24 +137,42 @@ def connect_sensors(devices, dongles, retries=5):
 def configure_and_subscribe_sensors(states):
     for st in states:
         b = st.device.board
-        # ACC
+
+        # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
+        time.sleep(0.1)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
+        time.sleep(0.1)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
-        # GYRO
+        time.sleep(0.1)     # ← wait 100 ms for the write to finish
+
+        # GYRO: set ODR and range
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
+        time.sleep(0.1)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
+        time.sleep(0.1)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+        time.sleep(0.1)     # ← wait again
+
         # Subscribe ACC
         sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+        time.sleep(0.1)
         libmetawear.mbl_mw_datasignal_subscribe(sig_a, None, st.get_acc_cb())
+        time.sleep(0.05)    # ← tiny pause before enabling
         libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
+        time.sleep(0.05)
         libmetawear.mbl_mw_acc_start(b)
+        time.sleep(0.05)
+
         # Subscribe GYRO
         sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        time.sleep(0.1)
         libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
+        time.sleep(0.05)
         libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+        time.sleep(0.05)
         libmetawear.mbl_mw_gyro_bmi270_start(b)
+
 
 # Desconexión limpia
 # Replace your old disconnect_sensors() with this:
