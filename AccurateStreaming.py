@@ -199,7 +199,11 @@ def disconnect_sensors():
         gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
-    
+
+        print("Debug reset")
+        libmetawear.mbl_mw_debug_reset(state.device.board)
+        time.sleep(2.0)
+        print("debugged")
 
         # 5) Finally, disconnect over BLE
         libmetawear.mbl_mw_debug_disconnect(b)
@@ -249,11 +253,6 @@ if __name__ == '__main__':
         pass
 
     # f) Timer done → clean up & dump
-    for state in states:
-        print("Debug reset")
-        libmetawear.mbl_mw_debug_reset(state.device.board)
-        time.sleep(2.0)
-        print("debugged")
     disconnect_sensors()
     for st in states:
         print("dumping")
