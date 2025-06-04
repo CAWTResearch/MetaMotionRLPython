@@ -183,13 +183,29 @@ if __name__ == '__main__':
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
 
-    def on_exit(sig, frame):
-        print("\nStopping...")
-        disconnect_sensors()
-        sys.exit(0)
-    signal.signal(signal.SIGINT, on_exit)
+    # def on_exit(sig, frame):
+    #     print("\n\nStopping streaming and writing CSVs…")
+    #     # 1) Stop subscriptions & streams, then disconnect
+    #     disconnect_sensors()
+
+    #     # 2) For each State, dump accumulated data into CSVs
+    #     for st in states:
+    #         st.dump_to_csv()
+    #         print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
+    #         print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
+
+    #     sys.exit(0)
+    # signal.signal(signal.SIGINT, on_exit)
     print("Streaming 50 Hz to separate acc_/gyro_ CSVs...")
     while time.sleep(60.0):
-        print("\n60 segundos transcurridos. Deteniendo streaming...")
+        print("\n\nStopping streaming and writing CSVs…")
+        # 1) Stop subscriptions & streams, then disconnect
         disconnect_sensors()
+
+        # 2) For each State, dump accumulated data into CSVs
+        for st in states:
+            st.dump_to_csv()
+            print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
+            print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
+
         sys.exit(0)
