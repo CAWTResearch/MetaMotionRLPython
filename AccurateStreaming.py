@@ -13,6 +13,7 @@ device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1", "F0:3D:E7:ED:F6:F7", "F8
 dongle_macs = ['00:E0:5C:48:01:63', '00:E0:5C:48:06:BD',  'D8:3A:DD:EA:0C:EF']
 states = []
 # Asegura desconexión previa
+STREAM_DURATION = 30
 
 def force_disconnect_sensors():
     try:
@@ -183,29 +184,37 @@ if __name__ == '__main__':
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
 
-    # def on_exit(sig, frame):
-    #     print("\n\nStopping streaming and writing CSVs…")
-    #     # 1) Stop subscriptions & streams, then disconnect
-    #     disconnect_sensors()
-
-    #     # 2) For each State, dump accumulated data into CSVs
-    #     for st in states:
-    #         st.dump_to_csv()
-    #         print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
-    #         print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
-
-    #     sys.exit(0)
-    # signal.signal(signal.SIGINT, on_exit)
-    print("Streaming 50 Hz to separate acc_/gyro_ CSVs...")
-    while time.sleep(60.0):
-        print("\n\nStopping streaming and writing CSVs…")
-        # 1) Stop subscriptions & streams, then disconnect
+    # d) Allow Ctrl+C to abort early
+    def on_exit(sig, frame):
+        print("\nInterrupted by user!")
         disconnect_sensors()
-
-        # 2) For each State, dump accumulated data into CSVs
         for st in states:
             st.dump_to_csv()
             print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
             print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
-
         sys.exit(0)
+
+    signal.signal(signal.SIGINT, on_exit)
+
+    # e) Timer loop
+    print(f"Streaming 50 Hz from each sensor for {STREAM_DURATION} seconds…")
+    start_ts = time.time()
+    try:
+        while True:
+            if time.time() - start_ts >= STREAM_DURATION:
+                print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
+                break
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        # If user presses Ctrl+C during the timer, on_exit will run
+        pass
+
+    # f) Timer done → clean up & dump
+    disconnect_sensors()
+    for st in states:
+        st.dump_to_csv()
+        print(f"  • Wrote {len(st.acc_data_list)} accel rows → {st.acc_file}")
+        print(f"  • Wrote {len(st.gyro_data_list)} gyro rows → {st.gyro_file}")
+
+    print("All done. Exiting.")
+    sys.exit(0)
