@@ -8,9 +8,9 @@ from mbientlab.metawear.cbindings import (
 import subprocess, time, datetime, os, csv, signal, sys
 
 # Sensor y dongle MACs
-device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1", "F0:3D:E7:ED:F6:F7", "F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3"]
+device_macs = ["C4:65:87:1A:13:0B","D5:42:DD:AC:BE:E1", "E6:AC:5E:B8:4C:D9", "F0:3D:E7:ED:F6:F7", "F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3"]
 # dongle_macs = ["3C:0A:F3:10:17:F0"]
-dongle_macs = ['00:E0:5C:48:01:63', '00:E0:5C:48:06:BD',  'D8:3A:DD:EA:0C:EF']
+dongle_macs = ["00:E0:5C:48:06:BD","00:E0:5C:48:01:63","D8:3A:DD:EA:0C:EF"]
 states = []
 # Asegura desconexión previa
 
@@ -37,74 +37,63 @@ def force_disconnect_sensors():
 class State:
     def __init__(self, device):
         self.device = device
-
-        # Base folder for final CSVs; ensure it exists
         base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
         os.makedirs(base_dir, exist_ok=True)
 
-        # Remember each sensor's MAC (without colons) to name files
-        mac_no_colon = device.address.replace(":", "")
+        # 2) Construct full, absolute paths to the two CSVs inside DriveUpload/
+        self.acc_file  = os.path.join(base_dir, f"acc_{device.address}.csv")
+        self.gyro_file = os.path.join(base_dir, f"gyro_{device.address}.csv")
 
-        # Full paths where we’ll dump at the end:
-        self.acc_file  = os.path.join(base_dir, f"acc_{mac_no_colon}.csv")
-        self.gyro_file = os.path.join(base_dir, f"gyro_{mac_no_colon}.csv")
+        # 3) If acc_file already exists, delete it; then (re)create with header
+        if os.path.isfile(self.acc_file):
+            os.remove(self.acc_file)
+        with open(self.acc_file, 'w', newline='') as f:
+            csv.writer(f).writerow([
+                'host_time', 'sensor_time',
+                'acc_x', 'acc_y', 'acc_z'
+            ])
 
-        # Instead of creating the files now, we just create empty lists
-        # that will hold tuples like (host_time, sensor_time, x, y, z).
-        self.acc_data_list  = []
-        self.gyro_data_list = []
-
-        # Prepare callback wrappers
+        # 4) Do the same for gyro_file
+        if os.path.isfile(self.gyro_file):
+            os.remove(self.gyro_file)
+        with open(self.gyro_file, 'w', newline='') as f:
+            csv.writer(f).writerow([
+                'host_time', 'sensor_time',
+                'gyro_x', 'gyro_y', 'gyro_z'
+            ])
         self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
 
     def acc_data_handler(self, ctx, data_ptr):
-        # Called on each accelerometer sample
-        # 1) sensor timestamp → human‐readable
+        # Full-precision sensor timestamp (converted to human-readable)
         sensor_time = datetime.datetime.fromtimestamp(
             data_ptr.contents.epoch / 1000.0
         ).strftime('%H:%M:%S.%f')
-        # 2) host timestamp
+        # Full-precision host timestamp
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
-        # 3) parse x,y,z
         val = parse_value(data_ptr)
-        x, y, z = val.x, val.y, val.z
-
-        # 4) append to in-memory list
-        self.acc_data_list.append((host_time, sensor_time, x, y, z))
-
+        with open(self.acc_file, 'a', newline='') as f:
+            csv.writer(f).writerow([
+                host_time, sensor_time,
+                val.x, val.y, val.z
+            ])
     def gyro_data_handler(self, ctx, data_ptr):
-        # Same as above, but for gyroscope
         sensor_time = datetime.datetime.fromtimestamp(
             data_ptr.contents.epoch / 1000.0
         ).strftime('%H:%M:%S.%f')
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         val = parse_value(data_ptr)
-        x, y, z = val.x, val.y, val.z
-
-        self.gyro_data_list.append((host_time, sensor_time, x, y, z))
+        with open(self.gyro_file, 'a', newline='') as f:
+            csv.writer(f).writerow([
+                host_time, sensor_time,
+                val.x, val.y, val.z
+            ])
 
     def get_acc_cb(self):
         return self.acc_cb
 
     def get_gyro_cb(self):
         return self.gyro_cb
-
-    def dump_to_csv(self):
-        """
-        When streaming is done, call this to write both lists out to CSV.
-        """
-        # ACC
-        with open(self.acc_file, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(['host_time', 'sensor_time', 'acc_x', 'acc_y', 'acc_z'])
-            writer.writerows(self.acc_data_list)
-
-        # GYRO
-        with open(self.gyro_file, "w", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(['host_time', 'sensor_time', 'gyro_x', 'gyro_y', 'gyro_z'])
-            writer.writerows(self.gyro_data_list)
 # Asigna sensores a dongles en modo circular
 
 def assign_sensors_to_dongles(devices, dongles):
@@ -193,3 +182,4 @@ if __name__ == '__main__':
         print("\n60 segundos transcurridos. Deteniendo streaming...")
         disconnect_sensors()
         sys.exit(0)
+
