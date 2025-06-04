@@ -165,19 +165,28 @@ def disconnect_sensors():
 
         # 1) Stop accel sampling
         libmetawear.mbl_mw_acc_stop(b)
+        time.sleep(0.5)
         libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
+        time.sleep(0.5)
 
         # 2) Stop gyro sampling
         libmetawear.mbl_mw_gyro_bmi270_stop(b)
+        time.sleep(0.5)
+
         libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+        time.sleep(0.5)
 
         # 3) Unsubscribe from accel signal
         acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+        time.sleep(0.5)
         libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
+        time.sleep(0.5)
 
         # 4) Unsubscribe from gyro signal
         gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        time.sleep(0.5)
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
+        time.sleep(0.5)
 
         # 5) Finally, disconnect over BLE
         libmetawear.mbl_mw_debug_disconnect(b)
