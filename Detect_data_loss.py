@@ -61,6 +61,6 @@ def plot_data_loss_bar_chart(data_loss_results):
     plt.show()
 
 if __name__ == "__main__":
-    folder = "./1m6SensorFirstPermutation"  # Reemplaza con la ruta de tu carpeta
+    folder = "./downloadTrial"  # Reemplaza con la ruta de tu carpeta
     results = analyze_folder(folder, expected_rate=50)
     plot_data_loss_bar_chart(results)
