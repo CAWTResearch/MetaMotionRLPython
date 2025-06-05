@@ -127,6 +127,10 @@ def connect_sensors(devices, dongles, retries=5):
                     if m.is_connected:
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
+                        libmetawear.mbl_mw_settings_set_connection_parameters(
+                            st.board, 750.0, 750.0, 128, 16384
+                        )
+                        time.sleep(0.1)
                         states.append(st)
                         break
                 except Exception as e:
