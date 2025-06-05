@@ -127,9 +127,6 @@ def connect_sensors(devices, dongles, retries=5):
                     if m.is_connected:
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
-                        libmetawear.mbl_mw_settings_set_connection_parameters(
-                            st.board, 750.0, 750.0, 128, 16384
-                        )
                         time.sleep(0.1)
                         states.append(st)
                         break
@@ -142,6 +139,9 @@ def connect_sensors(devices, dongles, retries=5):
 def configure_and_subscribe_sensors(states):
     for st in states:
         b = st.device.board
+        libmetawear.mbl_mw_settings_set_connection_parameters(
+            b , 750.0, 750.0, 128, 16384
+        )
 
         # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
