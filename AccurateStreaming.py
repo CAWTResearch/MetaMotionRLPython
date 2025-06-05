@@ -10,8 +10,8 @@ import subprocess, time, datetime, os, csv, signal, sys
 # Sensor y dongle MACs
 device_macs = ["D5:42:DD:AC:BE:E1","C4:65:87:1A:13:0B", "F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9"]
 # dongle_macs = ["3C:0A:F3:10:17:F0"]
-dongle_macs = ['00:E0:5C:48:06:BD','00:E0:5C:48:03:93']
-# 'D8:3A:DD:EA:0C:EF' ,'00:E0:5C:48:01:63','00:E0:5C:48:00:2F'
+dongle_macs = ['00:E0:5C:48:06:BD','00:E0:5C:48:03:93','00:E0:5C:48:01:63']
+# 'D8:3A:DD:EA:0C:EF' ,'00:E0:5C:48:00:2F'
 states = []
 # Asegura desconexión previa
 STREAM_DURATION = 60
