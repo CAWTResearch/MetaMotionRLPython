@@ -152,6 +152,7 @@ def configure_and_subscribe_sensors(states):
         time.sleep(2)  # Give time for config to apply
     
     for st in states:
+        b = st.device.board
         
 
         # Subscribe ACC
