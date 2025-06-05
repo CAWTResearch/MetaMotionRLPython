@@ -149,6 +149,9 @@ def configure_and_subscribe_sensors(states):
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+        time.sleep(2)  # Give time for config to apply
+    
+    for st in states:
         
 
         # Subscribe ACC
