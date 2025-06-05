@@ -144,13 +144,13 @@ def configure_and_subscribe_sensors(states):
         b = st.device.board
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._12_5Hz)
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._12_5Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
         time.sleep(2)  # Give time for config to apply
