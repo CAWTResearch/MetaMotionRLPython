@@ -140,7 +140,7 @@ def configure_and_subscribe_sensors(states):
     for st in states:
         b = st.device.board
 
-        libmetawear.mbl_mw_settings_set_connection_parameters(b, 30.0, 50.0, 0, 4000)
+        libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(b, 8)
         time.sleep(1.5)
