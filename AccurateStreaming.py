@@ -145,6 +145,22 @@ def configure_and_subscribe_sensors(states):
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(b, 4)
         time.sleep(1.5)
+        event = libmetawear.mbl_mw_settings_get_disconnect_event(b)
+
+        # Create a handler for the event
+        fn_wrapper = FnVoid_VoidP_VoidP_MblMwEventP_DataP(on_disconnect)
+
+        # Set the handler for the disconnect event
+        libmetawear.mbl_mw_event_record_commands(event)
+
+        # Optionally log or record commands here
+        # e.g., turn on LED when disconnecting
+
+        # Finish recording the commands
+        libmetawear.mbl_mw_event_end_record(event, None, None)
+
+        # Subscribe to the event
+        libmetawear.mbl_mw_event_subscribe(event, None, fn_wrapper)
 
         # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
