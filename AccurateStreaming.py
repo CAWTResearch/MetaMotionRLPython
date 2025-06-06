@@ -215,7 +215,7 @@ def disconnect_sensors():
         
     for st in states:
 
-        # print("Debug reset")
+        print("Debug")
         # libmetawear.mbl_mw_debug_reset(st.device.board)
         time.sleep(2.0)
         # print("debugged")
