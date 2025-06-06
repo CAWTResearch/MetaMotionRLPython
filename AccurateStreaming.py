@@ -139,7 +139,7 @@ def connect_sensors(devices, dongles, retries=5):
 def configure_and_subscribe_sensors(states):
     for st in states:
         b = st.device.board
-        b.on_disconnect = on_disconnect
+        b.board.on_disconnect = on_disconnect
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b , 7.5, 7.5, 0, 6000
         )
