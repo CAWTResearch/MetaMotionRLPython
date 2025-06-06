@@ -142,7 +142,7 @@ def configure_and_subscribe_sensors(states):
 
         libmetawear.mbl_mw_settings_set_connection_parameters(b, 30.0, 50.0, 0, 4000)
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
         time.sleep(1.5)
         
 
@@ -215,10 +215,10 @@ def disconnect_sensors():
         
     for st in states:
 
-        print("Debug reset")
-        libmetawear.mbl_mw_debug_reset(st.device.board)
+        # print("Debug reset")
+        # libmetawear.mbl_mw_debug_reset(st.device.board)
         time.sleep(2.0)
-        print("debugged")
+        # print("debugged")
 
         # 5) Finally, disconnect over BLE
         libmetawear.mbl_mw_debug_disconnect(b)
