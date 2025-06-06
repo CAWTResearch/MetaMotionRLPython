@@ -139,9 +139,12 @@ def connect_sensors(devices, dongles, retries=5):
 def configure_and_subscribe_sensors(states):
     for st in states:
         b = st.device.board
-        # libmetawear.mbl_mw_settings_set_connection_parameters(
-        #     b , 750.0, 750.0, 128, 16384
-        # )
+        libmetawear.mbl_mw_settings_set_connection_parameters(
+            b , 7.5, 7.5, 0, 6000
+        )
+        time.sleep(1.5)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
+        time.sleep(1.5)
 
         # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
@@ -152,8 +155,7 @@ def configure_and_subscribe_sensors(states):
         # GYRO: set ODR and range
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
-        time.sleep(2)  # Give time for config to apply
+        libmetawear.mbl_mw_gyro_bmi270_write_config(b)  # Give time for config to apply
     
     for st in states:
         b = st.device.board
