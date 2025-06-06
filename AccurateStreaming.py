@@ -221,7 +221,7 @@ def disconnect_sensors():
         # print("debugged")
 
         # 5) Finally, disconnect over BLE
-        # libmetawear.mbl_mw_debug_disconnect(b)
+        libmetawear.mbl_mw_debug_disconnect(b)
 
         # Give the board a moment to process each step
         time.sleep(1.0)
