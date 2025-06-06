@@ -1,7 +1,7 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import (
-    FnVoid_VoidP_DataP, FnVoid_VoidP_VoidP_MblMwEventP_DataP,
+    FnVoid_VoidP_DataP, FnVoid_VoidP,
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
@@ -148,16 +148,9 @@ def configure_and_subscribe_sensors(states):
         event = libmetawear.mbl_mw_settings_get_disconnect_event(b)
 
         # Create a handler for the event
-        fn_wrapper = FnVoid_VoidP_VoidP_MblMwEventP_DataP(on_disconnect)
+        fn_wrapper = FnVoid_VoidP(on_disconnect)
 
         # Set the handler for the disconnect event
-        libmetawear.mbl_mw_event_record_commands(event)
-
-        # Optionally log or record commands here
-        # e.g., turn on LED when disconnecting
-
-        # Finish recording the commands
-        libmetawear.mbl_mw_event_end_record(event, None, None)
 
         # Subscribe to the event
         libmetawear.mbl_mw_event_subscribe(event, None, fn_wrapper)
