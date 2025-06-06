@@ -142,7 +142,7 @@ def configure_and_subscribe_sensors(states):
 
         libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 100)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
         time.sleep(1.5)
         
 
