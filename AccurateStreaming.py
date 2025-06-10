@@ -169,7 +169,7 @@ def connect_sensors(devices, dongles, retries=5):
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
                         time.sleep(0.1)
-                        m.on_disconnect = lambda status: on_disconnect(status, st)
+                        m.on_disconnect = lambda status, st=st: on_disconnect(status, st)
                         states.append(st)
                         break
                 except Exception as e:
