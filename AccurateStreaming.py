@@ -2,7 +2,7 @@ from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP, FnVoid_VoidP,
-    Accbmi160Odr, AccBmi160Odr, AccBoschRange,
+    Accbmi270Odr, Accbmi160Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, datetime, os, csv, signal, sys
@@ -156,7 +156,7 @@ def configure_and_subscribe_sensors(states):
         
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._50Hz)
+        libmetawear.mbl_mw_acc_bmi160_set_odr(b, Accbmi160Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
