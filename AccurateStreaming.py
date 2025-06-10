@@ -180,10 +180,14 @@ def connect_sensors(devices, dongles, retries=5):
 
 # Configura y suscribe sensores por separado
 def configure_and_subscribe_sensors(states):
+    min_maxIntervals = [(7.5,7.5),(10,10),(15,15),(20,20),(45,45)]
+    latencyIntervals = [1000,2000,4000,6000,8000]
+    index = 0
+
     for st in states:
         b = st.device.board
 
-        libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
+        libmetawear.mbl_mw_settings_set_connection_parameters(b, min_maxIntervals[index][0], min_maxIntervals[index][1], 0, latencyIntervals[index])
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(b, 4)
         time.sleep(1.5)
@@ -201,6 +205,7 @@ def configure_and_subscribe_sensors(states):
         libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._1000dps)
         libmetawear.mbl_mw_gyro_bmi160_write_config(b)  # Give time for config to apply
+        index += 1
     
     for st in states:
         b = st.device.board
