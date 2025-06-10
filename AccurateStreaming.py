@@ -130,7 +130,7 @@ def on_disconnect(ctx, st):
     b = st.device.board
     print(f"[WARN] Lost connection to {st.device.address}. Attempting reconnection…")
     # tear down your state for this device, then:
-    if st.device.is_connected:
+    if not st.device.is_connected:
         print("Im trying to reconnect --=-=-=-=-=-=-=-=-=-")
         libmetawear.mbl_mw_debug_disconnect(b)
         st.device.disconnect()
