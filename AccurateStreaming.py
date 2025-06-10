@@ -129,7 +129,7 @@ def assign_sensors_to_dongles(devices, dongles):
 def on_disconnect(ctx, board):
     print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
     # tear down your state for this device, then:
-    board.connect(board.address, board.hci_mac)
+    board.connect()
     
 
 def connect_sensors(devices, dongles, retries=5):
