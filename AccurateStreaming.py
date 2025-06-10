@@ -129,8 +129,10 @@ def assign_sensors_to_dongles(devices, dongles):
 def on_disconnect(ctx, board):
     print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
     # tear down your state for this device, then:
-    
+
     libmetawear.mbl_mw_debug_disconnect(board)
+    board.disconnect()
+    time.sleep(1.0)
     board.connect()
     
 
