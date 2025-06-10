@@ -7,6 +7,8 @@ from mbientlab.metawear.cbindings import (
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, datetime, os, csv, signal, sys
+from threading import Event
+
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -136,6 +138,7 @@ def connect_sensors(devices, dongles, retries=5):
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
                         time.sleep(0.1)
+                        m.on_disconnect = lambda status: print("disconnected"+status)
                         states.append(st)
                         break
                 except Exception as e:
