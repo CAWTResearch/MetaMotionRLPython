@@ -2,7 +2,7 @@ from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP, FnVoid_VoidP,
-    AccBmi270Odr, AccBoschRange,
+    Accbmi160Odr, AccBmi160Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, datetime, os, csv, signal, sys
@@ -149,22 +149,22 @@ def configure_and_subscribe_sensors(states):
 
         libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
         time.sleep(1.5)
         
 
         
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
+        libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)  # Give time for config to apply
+        libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._50Hz)
+        libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._1000dps)
+        libmetawear.mbl_mw_gyro_bmi160_write_config(b)  # Give time for config to apply
     
     for st in states:
         b = st.device.board
@@ -181,13 +181,13 @@ def configure_and_subscribe_sensors(states):
 
 
         # Subscribe GYRO
-        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
 
         libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
 
-        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
 
-        libmetawear.mbl_mw_gyro_bmi270_start(b)
+        libmetawear.mbl_mw_gyro_bmi160_start(b)
 
 
 # Desconexión limpia
@@ -204,10 +204,10 @@ def disconnect_sensors():
 
 
         # 2) Stop gyro sampling
-        libmetawear.mbl_mw_gyro_bmi270_stop(b)
+        libmetawear.mbl_mw_gyro_bmi160_stop(b)
    
 
-        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(b)
   
         # 3) Unsubscribe from accel signal
         acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
@@ -216,7 +216,7 @@ def disconnect_sensors():
      
 
         # 4) Unsubscribe from gyro signal
-        gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        gyro_signal = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
         
