@@ -1,5 +1,6 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
+from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP, FnVoid_VoidP,
     AccBmi270Odr, AccBmi160Odr, AccBoschRange,
