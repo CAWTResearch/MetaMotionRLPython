@@ -21,7 +21,7 @@ dongle_macs = ['00:E0:5C:48:00:2F','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 states = []
 
 # Asegura desconexión previa
-STREAM_DURATION = 180
+STREAM_DURATION = 60
 
 # Old Sensor MACs for reference
 device_macs = ["EE:1B:72:FA:BF:E8","FA:F1:20:99:CB:B4","CE:94:48:FE:5D:C5","EC:57:2E:32:05:52", "F1:1E:E2:6F:1D:E1"]
@@ -126,6 +126,11 @@ def assign_sensors_to_dongles(devices, dongles):
     return assign
 
 # Conecta sensores y retorna instancias State
+def on_disconnect(ctx, board):
+    print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
+    # tear down your state for this device, then:
+    board.connect(board.address, board.hci_mac)
+    
 
 def connect_sensors(devices, dongles, retries=5):
     for dongle, devs in assign_sensors_to_dongles(devices, dongles).items():
@@ -138,7 +143,7 @@ def connect_sensors(devices, dongles, retries=5):
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
                         time.sleep(0.1)
-                        m.on_disconnect = lambda status: print("disconnected"+status)
+                        m.on_disconnect = lambda status: on_disconnect(status, m)
                         states.append(st)
                         break
                 except Exception as e:
@@ -242,11 +247,7 @@ def disconnect_sensors():
 
 
 
-def on_disconnect(ctx, board):
-    print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
-    # tear down your state for this device, then:
-    board.connect(board.address, board.hci_mac)
-    
+
 # Main loop
 if __name__ == '__main__':
     force_disconnect_sensors()
