@@ -126,35 +126,34 @@ def assign_sensors_to_dongles(devices, dongles):
     return assign
 
 # Conecta sensores y retorna instancias State
-def on_disconnect(ctx, board):
-
-    
-    print(f"[WARN] Lost connection to {board.address}. Attempting reconnection…")
+def on_disconnect(ctx, st):
+    b = st.device.board
+    print(f"[WARN] Lost connection to {st.device.address}. Attempting reconnection…")
     # tear down your state for this device, then:
-    if board.is_connected:
+    if st.device.is_connected:
         print("Im trying to reconnect --=-=-=-=-=-=-=-=-=-")
-        libmetawear.mbl_mw_debug_disconnect(board.board)
-        board.disconnect()
+        libmetawear.mbl_mw_debug_disconnect(b)
+        st.device.disconnect()
         time.sleep(1.0)
-        board.connect()
+        st.device.connect()
 
-        sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(board.board)
+        sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
 
         libmetawear.mbl_mw_datasignal_subscribe(sig_a, None, st.get_acc_cb())
 
-        libmetawear.mbl_mw_acc_enable_acceleration_sampling(board.board)
+        libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
   
-        libmetawear.mbl_mw_acc_start(board.board)
+        libmetawear.mbl_mw_acc_start(b)
 
 
         # Subscribe GYRO
-        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(board.board)
+        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
 
         libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
 
-        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(board.board)
+        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
 
-        libmetawear.mbl_mw_gyro_bmi160_start(board.board)
+        libmetawear.mbl_mw_gyro_bmi160_start(b)
 
 
     
@@ -170,7 +169,7 @@ def connect_sensors(devices, dongles, retries=5):
                         print(f"Connected {mac} via {dongle}")
                         st = State(m)
                         time.sleep(0.1)
-                        m.on_disconnect = lambda status: on_disconnect(status, m)
+                        m.on_disconnect = lambda status: on_disconnect(status, st)
                         states.append(st)
                         break
                 except Exception as e:
