@@ -132,10 +132,11 @@ def on_disconnect(ctx, st):
     # tear down your state for this device, then:
     if not st.device.is_connected:
         print("Im trying to reconnect --=-=-=-=-=-=-=-=-=-")
-        libmetawear.mbl_mw_debug_disconnect(b)
-        st.device.disconnect()
-        time.sleep(1.0)
+        # libmetawear.mbl_mw_debug_disconnect(b)
+        # st.device.disconnect()
+        
         st.device.connect()
+        time.sleep(1.0)
 
         sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
 
