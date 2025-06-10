@@ -21,7 +21,7 @@ dongle_macs = ['00:E0:5C:48:00:2F','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 states = []
 
 # Asegura desconexión previa
-STREAM_DURATION = 120
+STREAM_DURATION = 60
 
 # Old Sensor MACs for reference
 device_macs = ["EE:1B:72:FA:BF:E8","FA:F1:20:99:CB:B4","CE:94:48:FE:5D:C5","EC:57:2E:32:05:52", "F1:1E:E2:6F:1D:E1"]
