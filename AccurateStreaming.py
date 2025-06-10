@@ -137,6 +137,26 @@ def on_disconnect(ctx, board):
         board.disconnect()
         time.sleep(1.0)
         board.connect()
+
+        sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(board.board)
+
+        libmetawear.mbl_mw_datasignal_subscribe(sig_a, None, st.get_acc_cb())
+
+        libmetawear.mbl_mw_acc_enable_acceleration_sampling(board.board)
+  
+        libmetawear.mbl_mw_acc_start(board.board)
+
+
+        # Subscribe GYRO
+        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(board.board)
+
+        libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
+
+        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(board.board)
+
+        libmetawear.mbl_mw_gyro_bmi160_start(board.board)
+
+
     
 
 def connect_sensors(devices, dongles, retries=5):
