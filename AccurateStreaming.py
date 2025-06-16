@@ -20,11 +20,11 @@ dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 states = []
 
 profiles = [
-    {"interval":25.0, "latency":2, "timeout":20000},
-    {"interval":30.0, "latency":2, "timeout":20000},
-    {"interval":35.0, "latency":2, "timeout":20000},
-    {"interval":40.0, "latency":2, "timeout":20000},
-    {"interval":7.5, "latency":2, "timeout":20000},
+    {"interval":25.0, "latency":5, "timeout":32000},
+    {"interval":30.0, "latency":5, "timeout":32000},
+    {"interval":35.0, "latency":5, "timeout":32000},
+    {"interval":40.0, "latency":5, "timeout":32000},
+    {"interval":7.5, "latency":5, "timeout":32000},
 ]
 
 
