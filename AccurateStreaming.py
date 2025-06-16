@@ -18,25 +18,17 @@ dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 
 states = []
 
-
 profiles = [
-    {"interval":25.0, "latency":2, "timeout":20000, "offset":0},
-    {"interval":30.0, "latency":3, "timeout":20000, "offset":10},
-    {"interval":35.0, "latency":4, "timeout":20000, "offset":20},
-    {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-    {"interval":7.5, "latency":0, "timeout":20000, "offset":30},
+    {"interval":25.0, "latency":2, "timeout":20000},
+    {"interval":30.0, "latency":3, "timeout":20000},
+    {"interval":35.0, "latency":4, "timeout":20000},
+    {"interval":40.0, "latency":5, "timeout":20000},
+    {"interval":7.5, "latency":0, "timeout":20000},
 ]
-# profiles = [
-#     {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-#     {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-#     {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-#     {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-#     {"interval":40.0, "latency":5, "timeout":20000, "offset":30},
-# ]
 
 
 # Asegura desconexión previa
-STREAM_DURATION = 1800
+STREAM_DURATION = 600
 
 def force_disconnect_sensors():
     try:
@@ -188,7 +180,7 @@ def configure_and_subscribe_sensors(states):
         # GYRO: set ODR and range
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)  # Give time for config to apply
+        libmetawear.mbl_mw_gyro_bmi270_write_config(b)  
     
     for st in states:
         b = st.device.board
