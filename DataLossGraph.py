@@ -30,26 +30,35 @@ def plot_streaming_with_loss(
           .reset_index(name='sample_count')
     )
 
-    # 6) Excluir primer y último segundo (posiblemente incompletos)
-    counts_filtered = counts[
-        (counts['second_interval'] != first_second) &
-        (counts['second_interval'] != last_second)
+    # 6) Generar todos los segundos esperados en el rango
+    full_seconds = pd.date_range(start=first_second, end=last_second, freq='s')
+
+    # 7) Combinar con los segundos presentes
+    counts_full = pd.DataFrame({'second_interval': full_seconds})
+    counts_full = counts_full.merge(counts, on='second_interval', how='left')
+    counts_full['sample_count'] = counts_full['sample_count'].fillna(0).astype(int)
+
+    # 8) Excluir primer y último segundo
+    counts_filtered = counts_full[
+        (counts_full['second_interval'] != first_second) &
+        (counts_full['second_interval'] != last_second)
     ].copy()
 
-    # 7) Definir una columna 'color' según la pérdida de datos
+    # 9) Aplicar colores
     def color_for_count(n):
-        if pd.isna(n):
-            return 'black'  
+        if n == 0:
+            return 'black'
         elif n >= expected_rate:
-            return None           # No sombreado si cumple o excede el rate
+            return None
         elif n >= expected_rate - 5:
-            return 'yellow'       # Pérdida ≤ 5 muestras
+            return 'yellow'
         elif n >= expected_rate - 10:
-            return 'orange'       # Pérdida 6–10 muestras
+            return 'orange'
         else:
-            return 'red'          # Pérdida > 10 muestras
+            return 'red'
 
     counts_filtered['color'] = counts_filtered['sample_count'].apply(color_for_count)
+
 
     # 8) Preparar el plot
     fig, ax = plt.subplots(figsize=(14, 5))
@@ -101,7 +110,7 @@ def batch_plot(folder: str, sensor_prefix: str, expected_rate: int = 50):
         )
 
 if __name__ == "__main__":
-    data_folder   = "1.5meterblanky30minutetest3"  # folder where your acc_*.csv and gyro_*.csv live
+    data_folder   = "10minutewalkdisconnect"  # folder where your acc_*.csv and gyro_*.csv live
     expected_rate = 49             # or whichever rate you need
 
     # Plot all ACC files, then all GYRO files

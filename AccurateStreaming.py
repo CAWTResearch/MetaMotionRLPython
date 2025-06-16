@@ -123,7 +123,26 @@ class State:
         return self.gyro_cb
 
     def close_files(self):
+        sensor_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        # 2) host timestamp
+        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        # 3) parse x,y,z
+        val = 0
+        x, y, z = val.x, val.y, val.z
+
+        self._acc_writer.writerow([host_time, sensor_time, x, y, z])
+        self._acc_fh.flush()
+        self.acc_count += 1
         self._acc_fh.close()
+
+        sensor_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        val = 0
+        x, y, z = val.x, val.y, val.z
+
+        self._gyro_writer.writerow([host_time, sensor_time, x, y, z])
+        self._gyro_fh.flush()
+        self.gyro_count += 1
         self._gyro_fh.close()
 
 def assign_sensors_to_dongles(devices, dongles):

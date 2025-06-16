@@ -24,9 +24,13 @@ def detect_data_loss(csv_file_path, expected_rate):
 
     # 2) Seconds entirely missing from the data
     full_seconds = pd.date_range(first_second, last_second, freq='s').floor('s')
-    # drop first and last
-    full_seconds = full_seconds[1:-1]
-    present = set(counts_filtered['second_interval'])
+
+    # Only drop the *actual* seconds that exist in first/last rows
+    actual_first = df['second_interval'].iloc[0]
+    actual_last  = df['second_interval'].iloc[-1]
+    full_seconds = [ts for ts in full_seconds if ts != actual_first and ts != actual_last]
+
+    present = set(counts['second_interval'])
     missing = [ts for ts in full_seconds if ts not in present]
     if missing:
         print(f"\nAlso, these seconds were completely missing from {os.path.basename(csv_file_path)}:")
@@ -35,14 +39,14 @@ def detect_data_loss(csv_file_path, expected_rate):
     else:
         print(f"\nNo fully-missing seconds in {os.path.basename(csv_file_path)}.")
 
-    # → PRINT intervals with fewer-than-expected samples
-    low = counts_filtered[counts_filtered['sample_count'] < expected_rate]
-    if not low.empty:
-        print(f"\n[{os.path.basename(csv_file_path)}] Segundos con < {expected_rate} muestras:")
-        for _, r in low.iterrows():
-            print(f"  • {r['second_interval'].time()} → {r['sample_count']} muestras")
-    else:
-        print(f"\n[{os.path.basename(csv_file_path)}] No segundos con < {expected_rate} muestras.")
+    # # → PRINT intervals with fewer-than-expected samples
+    # low = counts_filtered[counts_filtered['sample_count'] < expected_rate]
+    # if not low.empty:
+    #     print(f"\n[{os.path.basename(csv_file_path)}] Segundos con < {expected_rate} muestras:")
+    #     for _, r in low.iterrows():
+    #         print(f"  • {r['second_interval'].time()} → {r['sample_count']} muestras")
+    # else:
+    #     print(f"\n[{os.path.basename(csv_file_path)}] No segundos con < {expected_rate} muestras.")
 
 
 
@@ -87,5 +91,5 @@ def plot_data_loss_bar_chart(data_loss_results):
 
 if __name__ == "__main__":
     folder = "./1.5meterblanky30minutetest3"  # Reemplaza con la ruta de tu carpeta
-    results = analyze_folder(folder, expected_rate=48)
+    results = analyze_folder(folder, expected_rate=50)
     plot_data_loss_bar_chart(results)
