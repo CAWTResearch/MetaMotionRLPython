@@ -21,10 +21,10 @@ states = []
 
 profiles = [
     {"interval":25.0, "latency":5, "timeout":32000},
-    {"interval":30.0, "latency":5, "timeout":32000},
-    {"interval":35.0, "latency":5, "timeout":32000},
-    {"interval":40.0, "latency":5, "timeout":32000},
-    {"interval":7.5, "latency":5, "timeout":32000},
+    {"interval":30.0, "latency":4, "timeout":32000},
+    {"interval":35.0, "latency":3, "timeout":32000},
+    {"interval":40.0, "latency":2, "timeout":32000},
+    {"interval":7.5, "latency":1, "timeout":32000},
 ]
 
 
