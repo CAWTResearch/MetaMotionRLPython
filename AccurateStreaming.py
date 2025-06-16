@@ -6,6 +6,7 @@ from mbientlab.metawear.cbindings import (
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, datetime, os, csv, signal, sys, threading, glob
+from math import inf
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -122,7 +123,7 @@ class State:
     def get_gyro_cb(self):
         return self.gyro_cb
 
-    def close_files(self):
+    def close_files_bad(self):
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         x, y, z = 0, 0, 0
         self._acc_writer.writerow([host_time, host_time, x, y, z])
@@ -133,6 +134,11 @@ class State:
         self._gyro_writer.writerow([host_time, host_time, x, y, z])
         self._gyro_fh.flush()
         self.gyro_count += 1
+        self._gyro_fh.close()
+
+    def close_files(self):
+
+        self._acc_fh.close()
         self._gyro_fh.close()
 
 def assign_sensors_to_dongles(devices, dongles):
@@ -329,8 +335,18 @@ if __name__ == '__main__':
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
         disconnect_sensors()
+        max_samples= 0
         for st in states:
-            st.close_files()
+            if max_samples< st.gyro_count:
+                max_samples = st.gyro_count
+            if max_samples< st.acc_count:
+                max_samples = st.acc_count
+
+        for st in states:
+            if max_samples*0.9 > st.acc_count or max_samples*0.9 > st.gyro_count:
+                st.close_files_bad()
+            else:
+                st.close_files()
             print(f"  • Wrote {st.acc_count} accel rows → {st.acc_file}")
             print(f"  • Wrote {st.gyro_count} gyro rows → {st.gyro_file}")
         sys.exit(0)
