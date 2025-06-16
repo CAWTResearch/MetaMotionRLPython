@@ -57,7 +57,7 @@ class State:
 
         self.acc_count  = 0
         self.gyro_count = 0
-        self.time
+        self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
 
         # Base folder for final CSVs; ensure it exists
         base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
