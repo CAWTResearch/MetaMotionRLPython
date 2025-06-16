@@ -110,7 +110,7 @@ def batch_plot(folder: str, sensor_prefix: str, expected_rate: int = 50):
         )
 
 if __name__ == "__main__":
-    data_folder   = "disconnect test2"  # folder where your acc_*.csv and gyro_*.csv live
+    data_folder   = "Walk10min1"  # folder where your acc_*.csv and gyro_*.csv live
     expected_rate = 49             # or whichever rate you need
 
     # Plot all ACC files, then all GYRO files
