@@ -59,6 +59,7 @@ class State:
         self.gyro_count = 0
         self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
 
+
         # Base folder for final CSVs; ensure it exists
         base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
         os.makedirs(base_dir, exist_ok=True)
@@ -340,7 +341,7 @@ if __name__ == '__main__':
     configure_and_subscribe_sensors(states)
     def best_sensor():
         max_samples= 0
-        best
+        best = states[0]
         for st in states:
             if max_samples< st.gyro_count:
                 max_samples = st.gyro_count
