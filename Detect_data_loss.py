@@ -8,7 +8,7 @@ def detect_data_loss(csv_file_path, expected_rate):
     df['second_interval'] = df['sensor_time'].dt.floor('s')
     first_second = df['second_interval'].min()
     last_second = df['second_interval'].max()
-    
+
     counts = (
         df.groupby('second_interval')
           .size()
@@ -22,10 +22,35 @@ def detect_data_loss(csv_file_path, expected_rate):
 
     loss_intervals = counts_filtered[counts_filtered['sample_count'] < expected_rate]
 
+    # 2) Seconds entirely missing from the data
+    full_seconds = pd.date_range(first_second, last_second, freq='s').floor('s')
+    # drop first and last
+    full_seconds = full_seconds[1:-1]
+    present = set(counts_filtered['second_interval'])
+    missing = [ts for ts in full_seconds if ts not in present]
+    if missing:
+        print(f"\nAlso, these seconds were completely missing from {os.path.basename(csv_file_path)}:")
+        for ts in missing:
+            print(f"  • {ts.time()}")
+    else:
+        print(f"\nNo fully-missing seconds in {os.path.basename(csv_file_path)}.")
+
+    # → PRINT intervals with fewer-than-expected samples
+    low = counts_filtered[counts_filtered['sample_count'] < expected_rate]
+    if not low.empty:
+        print(f"\n[{os.path.basename(csv_file_path)}] Segundos con < {expected_rate} muestras:")
+        for _, r in low.iterrows():
+            print(f"  • {r['second_interval'].time()} → {r['sample_count']} muestras")
+    else:
+        print(f"\n[{os.path.basename(csv_file_path)}] No segundos con < {expected_rate} muestras.")
+
+
+
     total_intervals_considered = len(counts_filtered)
     expected_total_samples = total_intervals_considered * expected_rate
     actual_total_samples = counts_filtered['sample_count'].sum()
     total_samples_lost = expected_total_samples - actual_total_samples
+
 
     return os.path.basename(csv_file_path), total_samples_lost, expected_total_samples
 
@@ -61,6 +86,6 @@ def plot_data_loss_bar_chart(data_loss_results):
     plt.show()
 
 if __name__ == "__main__":
-    folder = "./DriveUpload"  # Reemplaza con la ruta de tu carpeta
-    results = analyze_folder(folder, expected_rate=50)
+    folder = "./1.5meterblanky30minutetest3"  # Reemplaza con la ruta de tu carpeta
+    results = analyze_folder(folder, expected_rate=48)
     plot_data_loss_bar_chart(results)

@@ -38,7 +38,9 @@ def plot_streaming_with_loss(
 
     # 7) Definir una columna 'color' según la pérdida de datos
     def color_for_count(n):
-        if n >= expected_rate:
+        if pd.isna(n):
+            return 'black'  
+        elif n >= expected_rate:
             return None           # No sombreado si cumple o excede el rate
         elif n >= expected_rate - 5:
             return 'yellow'       # Pérdida ≤ 5 muestras
@@ -99,7 +101,7 @@ def batch_plot(folder: str, sensor_prefix: str, expected_rate: int = 50):
         )
 
 if __name__ == "__main__":
-    data_folder   = "DriveUpload"  # folder where your acc_*.csv and gyro_*.csv live
+    data_folder   = "1.5meterblanky30minutetest3"  # folder where your acc_*.csv and gyro_*.csv live
     expected_rate = 49             # or whichever rate you need
 
     # Plot all ACC files, then all GYRO files
