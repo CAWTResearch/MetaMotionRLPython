@@ -57,6 +57,7 @@ class State:
 
         self.acc_count  = 0
         self.gyro_count = 0
+        self.time
 
         # Base folder for final CSVs; ensure it exists
         base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
@@ -86,6 +87,7 @@ class State:
         # Prepare callback wrappers
         self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
+        
 
 
     def acc_data_handler(self, ctx, data_ptr):
@@ -104,6 +106,8 @@ class State:
         self._acc_fh.flush()
         self.acc_count += 1
 
+        self.time = sensor_time
+
     def gyro_data_handler(self, ctx, data_ptr):
         # Same as above, but for gyroscope
         sensor_time = datetime.datetime.fromtimestamp(
@@ -116,22 +120,26 @@ class State:
         self._gyro_writer.writerow([host_time, sensor_time, x, y, z])
         self._gyro_fh.flush()
         self.gyro_count += 1
+        self.time = sensor_time
+
 
     def get_acc_cb(self):
         return self.acc_cb
 
     def get_gyro_cb(self):
         return self.gyro_cb
+    
+    def get_time(self):
+        return self.time
 
-    def close_files_bad(self):
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+    def close_files_bad(self, last_time):
         x, y, z = 0, 0, 0
-        self._acc_writer.writerow([host_time, host_time, x, y, z])
+        self._acc_writer.writerow([last_time, last_time, x, y, z])
         self._acc_fh.flush()
         self.acc_count += 1
         self._acc_fh.close()
 
-        self._gyro_writer.writerow([host_time, host_time, x, y, z])
+        self._gyro_writer.writerow([last_time, last_time, x, y, z])
         self._gyro_fh.flush()
         self.gyro_count += 1
         self._gyro_fh.close()
@@ -330,21 +338,26 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
+    def best_sensor():
+        max_samples= 0
+        best
+        for st in states:
+            if max_samples< st.gyro_count:
+                max_samples = st.gyro_count
+                best = st
+            if max_samples< st.acc_count:
+                max_samples = st.acc_count
+                best = st
+        return best
 
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
         disconnect_sensors()
-        max_samples= 0
-        for st in states:
-            if max_samples< st.gyro_count:
-                max_samples = st.gyro_count
-            if max_samples< st.acc_count:
-                max_samples = st.acc_count
 
         for st in states:
-            if max_samples*0.9 > st.acc_count or max_samples*0.9 > st.gyro_count:
-                st.close_files_bad()
+            if best_sensor().acc_count*0.9 > st.acc_count or best_sensor().acc_count*0.9 > st.gyro_count:
+                st.close_files_bad(best_sensor().get_time())
             else:
                 st.close_files()
             print(f"  • Wrote {st.acc_count} accel rows → {st.acc_file}")
@@ -373,7 +386,10 @@ if __name__ == '__main__':
     disconnect_sensors()
     for st in states:
         print("dumping")
-        st.close_files()
+        if best_sensor().acc_count*0.9 > st.acc_count or best_sensor().acc_count*0.9 > st.gyro_count:
+            st.close_files_bad(best_sensor().get_time())
+        else:
+            st.close_files()
         print("dumped")
         print(f"  • Wrote {st.acc_count} accel rows → {st.acc_file}")
         print(f"  • Wrote {st.gyro_count} gyro rows → {st.gyro_file}")
