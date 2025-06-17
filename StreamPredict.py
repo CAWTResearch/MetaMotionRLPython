@@ -1,5 +1,6 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
+from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP, FnVoid_VoidP, 
     AccBmi270Odr, AccBoschRange,
@@ -17,6 +18,8 @@ dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 # dongle_macs = ["00:E0:5C:48:01:70","00:E0:5C:48:02:38", "00:E0:5C:48:01:34", "00:E0:5C:48:0B:98", "00:E0:5C:48:00:DA"]
 
 states = []
+QuaternionSensors = []
+NormalSensors = []
 
 profiles = [
     {"interval":25.0, "latency":5, "timeout":10000},
@@ -56,71 +59,43 @@ class State:
 
         self.acc_count  = 0
         self.gyro_count = 0
-        self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        self.quat_count = 0
+        
 
-
-        # Base folder for final CSVs; ensure it exists
-        base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
-        os.makedirs(base_dir, exist_ok=True)
+    
 
         # Remember each sensor's MAC (without colons) to name files
         mac_no_colon = device.address
 
-        # Full paths where we’ll dump at the end:
-        self.acc_file  = os.path.join(base_dir, f"acc_{mac_no_colon}.csv")
-        self.gyro_file = os.path.join(base_dir, f"gyro_{mac_no_colon}.csv")
-
-
-        # ACC file
-        self._acc_fh = open(self.acc_file,  "a", newline='')
-        self._acc_writer = csv.writer(self._acc_fh)
-        # write header only if file is new/empty
-        if os.path.getsize(self.acc_file) == 0:
-            self._acc_writer.writerow(['host_time','sensor_time','acc_x','acc_y','acc_z'])
-
-        # GYRO file
-        self._gyro_fh = open(self.gyro_file, "a", newline='')
-        self._gyro_writer = csv.writer(self._gyro_fh)
-        if os.path.getsize(self.gyro_file) == 0:
-            self._gyro_writer.writerow(['host_time','sensor_time','gyro_x','gyro_y','gyro_z'])
         
         # Prepare callback wrappers
         self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
+        self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
 
 
     def acc_data_handler(self, ctx, data_ptr):
-        # Called on each accelerometer sample
-        # 1) sensor timestamp → human‐readable
-        sensor_time = datetime.datetime.fromtimestamp(
-            data_ptr.contents.epoch / 1000.0
-        ).strftime('%H:%M:%S.%f')
-        # 2) host timestamp
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
-        # 3) parse x,y,z
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
 
-        self._acc_writer.writerow([host_time, sensor_time, x, y, z])
-        self._acc_fh.flush()
+
         self.acc_count += 1
 
-        self.time = sensor_time
 
     def gyro_data_handler(self, ctx, data_ptr):
-        # Same as above, but for gyroscope
-        sensor_time = datetime.datetime.fromtimestamp(
-            data_ptr.contents.epoch / 1000.0
-        ).strftime('%H:%M:%S.%f')
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
 
-        self._gyro_writer.writerow([host_time, sensor_time, x, y, z])
-        self._gyro_fh.flush()
+       
         self.gyro_count += 1
-        self.time = sensor_time
+
+    def quaternion_handler(self, ctx, data_ptr):
+        val = parse_value(data_ptr)
+        w, x, y, z = val.w, val.x, val.y, val.z
+
+        self.quat_count += 1
+
 
 
     def get_acc_cb(self):
@@ -129,25 +104,11 @@ class State:
     def get_gyro_cb(self):
         return self.gyro_cb
     
-    def get_time(self):
-        return self.time
+    def get_quaternion_cb(self):
+        return self.quaternion_cb
+    
 
-    def close_files_bad(self, last_time):
-        x, y, z = 0, 0, 0
-        self._acc_writer.writerow([last_time, last_time, x, y, z])
-        self._acc_fh.flush()
-        self.acc_count += 1
-        self._acc_fh.close()
 
-        self._gyro_writer.writerow([last_time, last_time, x, y, z])
-        self._gyro_fh.flush()
-        self.gyro_count += 1
-        self._gyro_fh.close()
-
-    def close_files(self):
-
-        self._acc_fh.close()
-        self._gyro_fh.close()
 
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
@@ -176,19 +137,53 @@ def connect_sensors(devices, dongles, retries=10):
                     print(f"Conn err {mac}: {e}")
                     time.sleep(1)
     return states
+def configureQuaternions(states, Q_Quantaty):
+    Sensor_Names = ["q_chest", "q_left_hand", "q_right_knee"]
 
-# Configura y suscribe sensores por separado
-def configure_and_subscribe_sensors(states):
-    for st, profile in zip(states, profiles):
+    i = 0
+    for st, settings in zip(states[len(NormalSensors)::len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors)::len(NormalSensors)+Q_Quantaty]):
+        d = st.device
+        print("Configuring device Quaternion" + d.address)
+
+        
+        libmetawear.mbl_mw_settings_set_connection_parameters(
+            d.board,
+            settings["interval"],   # min & max the same
+            settings["interval"],
+            settings["latency"],
+            settings["timeout"]
+        )
+        time.sleep(1.5)
+        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
+        time.sleep(1.5)
+
+        # Configuración de Sensor Fusion
+        libmetawear.mbl_mw_sensor_fusion_set_mode(d.board, SensorFusionMode.IMU_PLUS)
+        libmetawear.mbl_mw_sensor_fusion_set_acc_range(d.board, SensorFusionAccRange._16G)
+        libmetawear.mbl_mw_sensor_fusion_set_gyro_range(d.board, SensorFusionGyroRange._2000DPS)
+        libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
+        QuaternionSensors.append((Sensor_Names[i], st))
+        i+=1
+    
+    return 
+
+def configureNormal(states, N_Quantaty):
+
+    Sensor_Names = ["n_chest", "n_left_hand", "n_right_knee"]
+
+
+    i = 0
+    for st, settings in zip(states[::N_Quantaty], profiles[::N_Quantaty]):
         b = st.device.board
+        print("Configuring device Quaternion" + st.device.address + " Type   :   " + Sensor_Names[i])
 
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
-            profile["interval"],   # min & max the same
-            profile["interval"],
-            profile["latency"],
-            profile["timeout"]
+            settings["interval"],   # min & max the same
+            settings["interval"],
+            settings["latency"],
+            settings["timeout"]
         )
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(b, 8)
@@ -196,17 +191,25 @@ def configure_and_subscribe_sensors(states):
 
         # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
-        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
+        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._1000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)  
-    
-    for st in states:
-        b = st.device.board
+        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
+        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+
+        NormalSensors.append((Sensor_Names[i],st))
+        i+=1
+        
+
+    return
+
+def subscribe_sensors():
+    for Sensor in NormalSensors:
+        st = Sensor[1]
+        b = Sensor[1].device.board
         
 
         # Subscribe ACC
@@ -227,6 +230,43 @@ def configure_and_subscribe_sensors(states):
         libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
 
         libmetawear.mbl_mw_gyro_bmi270_start(b)
+
+    
+    for Sensor in QuaternionSensors:
+        st = Sensor[1]
+        d = Sensor[1].device
+
+        
+        signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(d.board, SensorFusionData.QUATERNION)
+        libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.quaternion_cb())
+        libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
+        libmetawear.mbl_mw_sensor_fusion_start(d.board)
+
+       
+
+        
+        
+
+# Configura y suscribe sensores por separado
+def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
+    if Int_Quaternions + Int_Normals != len(states):
+        raise ValueError("The sum of Int_Quaternions and Int_Normals must equal the number of states.")
+    
+    configureNormal(states, Int_Normals)
+    configureQuaternions(states, Int_Quaternions)
+
+    subscribe_sensors()
+    return
+    
+
+
+
+
+
+
+
+
+    
 
 
 # Desconexión limpia
@@ -327,41 +367,16 @@ def _do_reconnect(st, retries, backoff):
 # Main loop
 if __name__ == '__main__':
 
-    base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
-    for old in glob.glob(os.path.join(base_dir, "*.csv")):
-        try:
-            os.remove(old)
-            print(f"Deleted old file {old}")
-        except OSError as e:
-            print(f"Could not delete {old}: {e}")
 
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
-    configure_and_subscribe_sensors(states)
-    def best_sensor():
-        max_samples= 0
-        best = states[0]
-        for st in states:
-            if max_samples< st.gyro_count:
-                max_samples = st.gyro_count
-                best = st
-            if max_samples< st.acc_count:
-                max_samples = st.acc_count
-                best = st
-        return best
+    configure_and_subscribe_sensors(states, 3, 3)
 
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
         disconnect_sensors()
 
-        for st in states:
-            if best_sensor().acc_count*0.9 > st.acc_count or best_sensor().acc_count*0.9 > st.gyro_count:
-                st.close_files_bad(best_sensor().get_time())
-            else:
-                st.close_files()
-            print(f"  • Wrote {st.acc_count} accel rows → {st.acc_file}")
-            print(f"  • Wrote {st.gyro_count} gyro rows → {st.gyro_file}")
         sys.exit(0)
 
     signal.signal(signal.SIGINT, on_exit)
@@ -384,15 +399,6 @@ if __name__ == '__main__':
 
     # f) Timer done → clean up & dump
     disconnect_sensors()
-    for st in states:
-        print("dumping")
-        if best_sensor().acc_count*0.9 > st.acc_count or best_sensor().acc_count*0.9 > st.gyro_count:
-            st.close_files_bad(best_sensor().get_time())
-        else:
-            st.close_files()
-        print("dumped")
-        print(f"  • Wrote {st.acc_count} accel rows → {st.acc_file}")
-        print(f"  • Wrote {st.gyro_count} gyro rows → {st.gyro_file}")
 
     print("All done. Exiting.")
     sys.exit(0)
