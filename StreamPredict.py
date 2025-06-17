@@ -21,7 +21,7 @@ import joblib
 import numpy as np
 
 
-buffer = deque(maxlen=300)
+buffer = deque(maxlen=50)
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -481,16 +481,6 @@ def CombineData():
     buffer.append(Data)
     return 
 
-def get_sliding_windows(data, window_size=50, step_size=25):
-        windows = []
-        for start in range(0, len(data) - window_size + 1, step_size):
-            end = start + window_size
-            window = data[start:end]
-            windows.append(window)
-        return windows
-    
-
-    
 
 
 # Main loop
@@ -533,21 +523,27 @@ if __name__ == '__main__':
             CombineData()
             if len(buffer) >= 50:
                 buffer_data = list(buffer)
-                windows = get_sliding_windows(buffer_data, window_size=50, step_size=25)
 
-                for window in windows:
-                    # === Preprocesamiento e inferencia ===
-                    data_tensor = preprocess_data(window)
-                    with torch.no_grad():
-                        output = model(data_tensor)
-                        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                        prediction = int(torch.argmax(output, dim=1).item())
+                
+                # === Preprocesamiento e inferencia ===
+                data_tensor = preprocess_data(buffer_data)
 
-                    self.label.setText(f'Prediction: {self.class_names[prediction]}')
-                    # print(f'🧠 Pred: {self.class_names[prediction]} | Prob: {probabilities}')
-                    print(f'🧠 Pred: {self.class_names[prediction]}')
+                with torch.no_grad():
+                    output = model(data_tensor)
+                    probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                    prediction = int(torch.argmax(output, dim=1).item())
+                self.label.setText(f'Prediction: {self.class_names[prediction]}')
+                # print(f'🧠 Pred: {self.class_names[prediction]} | Prob: {probabilities}')
+                print(f'🧠 Pred: {self.class_names[prediction]}')
 
-            time.sleep(0.01)
+
+                # Move the buffer to the next window
+                for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()
+
+
+            time.sleep(0.02)
             print(f"{elapsedtime}")
         
     except KeyboardInterrupt:
