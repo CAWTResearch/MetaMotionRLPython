@@ -461,8 +461,6 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
 
-
-
     print("Current Order of sensors: " +  QuaternionSensors[0][0] + " " + QuaternionSensors[1][0] + " " + QuaternionSensors[2][0] + " " + NormalSensors[0][0] + " " + NormalSensors[1][0] + " " + NormalSensors[2][0])
 
 
@@ -476,7 +474,18 @@ def CombineData():
             NormalSensors[2][1].get_acc_X(), NormalSensors[2][1].get_acc_Y(), NormalSensors[2][1].get_acc_Z(),
             NormalSensors[2][1].get_gyro_X(), NormalSensors[2][1].get_gyro_Y(), NormalSensors[2][1].get_gyro_Z()]
     
+    buffer.append(Data)
+    return 
+
+def get_sliding_windows(data, window_size=50, step_size=25):
+        windows = []
+        for start in range(0, len(data) - window_size + 1, step_size):
+            end = start + window_size
+            window = data[start:end]
+            windows.append(window)
+        return windows
     
+
     
 
 
@@ -517,8 +526,10 @@ if __name__ == '__main__':
             if elapsedtime >= STREAM_DURATION:
                 print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
                 break
-            
-            
+            CombineData()
+            if len(buffer) >= 50:
+                continue
+
             time.sleep(1)
             print(f"{elapsedtime}")
         
