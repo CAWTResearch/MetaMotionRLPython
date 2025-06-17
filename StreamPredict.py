@@ -532,7 +532,26 @@ if __name__ == '__main__':
                 break
             CombineData()
             if len(buffer) >= 50:
-                continue
+                buffer_data = list(buffer)
+                windows = get_sliding_windows(buffer_data, window_size=30, step_size=5)
+
+                for window in windows:
+                    # === Preprocesamiento e inferencia ===
+                    data_tensor = preprocess_data(window)
+                    with torch.no_grad():
+                        output = model(data_tensor)
+                        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                        prediction = int(torch.argmax(output, dim=1).item())
+
+                    self.label.setText(f'Prediction: {self.class_names[prediction]}')
+                    # print(f'🧠 Pred: {self.class_names[prediction]} | Prob: {probabilities}')
+                    print(f'🧠 Pred: {self.class_names[prediction]}')
+
+
+
+                    
+
+                
 
             time.sleep(1)
             print(f"{elapsedtime}")
