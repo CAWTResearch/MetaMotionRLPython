@@ -51,9 +51,20 @@ profiles = [
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
 
-
 # Asegura desconexión previa
 STREAM_DURATION = 60
+
+
+
+def preprocess_data(self, buffer):
+    data_np = np.array(buffer)  # shape (N, 30)
+
+    flat = data_np.reshape(-1, 30)            # (N, 30)
+    scaled = self.scaler.transform(flat)      # (N, 30)
+
+    tensor = torch.tensor(scaled, dtype=torch.float32).unsqueeze(0)  # (1, N, 30)
+    return tensor
+
 
 def force_disconnect_sensors():
     try:
@@ -96,9 +107,6 @@ class State:
         self.quat_Y = 0
         self.quat_Z = 0
 
-        # Remember each sensor's MAC (without colons) to name files
-        mac_no_colon = device.address
-
         
         # Prepare callback wrappers
         self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
@@ -128,7 +136,7 @@ class State:
 
        
         self.gyro_count += 1
-
+    
     def quaternion_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
         w, x, y, z = val.w, val.x, val.y, val.z
