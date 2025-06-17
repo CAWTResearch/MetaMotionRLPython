@@ -533,7 +533,7 @@ if __name__ == '__main__':
             CombineData()
             if len(buffer) >= 50:
                 buffer_data = list(buffer)
-                windows = get_sliding_windows(buffer_data, window_size=30, step_size=5)
+                windows = get_sliding_windows(buffer_data, window_size=50, step_size=25)
 
                 for window in windows:
                     # === Preprocesamiento e inferencia ===
@@ -547,13 +547,7 @@ if __name__ == '__main__':
                     # print(f'🧠 Pred: {self.class_names[prediction]} | Prob: {probabilities}')
                     print(f'🧠 Pred: {self.class_names[prediction]}')
 
-
-
-                    
-
-                
-
-            time.sleep(1)
+            time.sleep(0.01)
             print(f"{elapsedtime}")
         
     except KeyboardInterrupt:
