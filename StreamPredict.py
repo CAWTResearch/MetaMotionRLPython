@@ -52,11 +52,11 @@ STREAM_DURATION = 60
 
 
 
-def preprocess_data(self, buffer):
+def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
 
     flat = data_np.reshape(-1, 30)            # (N, 30)
-    scaled = self.scaler.transform(flat)      # (N, 30)
+    scaled = scaler.transform(flat)      # (N, 30)
 
     tensor = torch.tensor(scaled, dtype=torch.float32).unsqueeze(0)  # (1, N, 30)
     return tensor
@@ -524,7 +524,7 @@ if __name__ == '__main__':
             if len(buffer) >= 50:
     
                 # === Preprocesamiento e inferencia ===
-                data_tensor = preprocess_data(buffer)
+                data_tensor = preprocess_data(buffer, scaler)
 
                 with torch.no_grad():
                     output = model(data_tensor)
