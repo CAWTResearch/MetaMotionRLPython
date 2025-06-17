@@ -1,7 +1,6 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
-from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP,
     AccBmi270Odr, AccBoschRange,
@@ -26,11 +25,8 @@ buffer = deque(maxlen=300)
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
-# device_macs = ['F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
 device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "D5:42:DD:AC:BE:E1", "E6:4F:B9:D7:18:7C" ,"E6:AC:5E:B8:4C:D9"]
-# device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9"]
 dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:03:93', '00:E0:5C:48:06:BD']
-# dongle_macs = ['D8:3A:DD:EA:0C:EF', '00:E0:5C:48:03:93', '00:E0:5C:48:06:BD']
 # dongle_macs = ["00:E0:5C:48:01:70","00:E0:5C:48:02:38", "00:E0:5C:48:01:34", "00:E0:5C:48:0B:98", "00:E0:5C:48:00:DA"]
 
 states = []
