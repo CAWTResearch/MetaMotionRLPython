@@ -80,6 +80,19 @@ class State:
         self.gyro_count = 0
         self.quat_count = 0
 
+        self.acc_Y = 0
+        self.acc_X = 0
+        self.acc_Z = 0
+
+        self.gyro_Y = 0
+        self.gyro_X = 0
+        self.gyro_Z = 0
+
+        self.quat_W = 0
+        self.quat_X = 0
+        self.quat_Y = 0
+        self.quat_Z = 0
+
         # Remember each sensor's MAC (without colons) to name files
         mac_no_colon = device.address
 
@@ -95,6 +108,9 @@ class State:
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
 
+        self.acc_X = x
+        self.acc_Y = y
+        self.acc_Z = z
 
         self.acc_count += 1
 
@@ -103,6 +119,10 @@ class State:
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
 
+        self.gyro_X = x
+        self.gyro_Y = y
+        self.gyro_Z = z
+
        
         self.gyro_count += 1
 
@@ -110,7 +130,14 @@ class State:
         val = parse_value(data_ptr)
         w, x, y, z = val.w, val.x, val.y, val.z
 
+        self.quat_W = w
+        self.quat_X = x 
+        self.quat_Y = y
+        self.quat_Z = z
+
         self.quat_count += 1
+
+
 
     def get_acc_cb(self):
         return self.acc_cb
@@ -121,6 +148,39 @@ class State:
     def get_quaternion_cb(self):
         return self.quaternion_cb
     
+
+
+    
+    def get_acc_Y(self):
+        return self.acc_Y
+    
+    def get_acc_X(self):
+        return self.acc_X
+    
+    def get_acc_Z(self):
+        return self.acc_Z
+    
+
+    
+    def get_gyro_Y(self):
+        return self.gyro_Y
+    def get_gyro_X(self):
+        return self.gyro_X
+    def get_gyro_Z(self):
+        return self.gyro_Z
+    
+    
+    
+    def get_quat_W(self):
+        return self.quat_W
+    def get_quat_X(self):
+        return self.quat_X
+    def get_quat_Y(self):
+        return self.quat_Y
+    def get_quat_Z(self):
+        return self.quat_Z
+
+
 
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
@@ -405,8 +465,8 @@ if __name__ == '__main__':
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
 
-    # model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
-    model = CNN_LSTM_Sensor()
+    model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
+    
     # Scaler
     scaler = joblib.load("minmax_scaler.pkl")
     print("✅ Scaler cargado")
@@ -415,18 +475,7 @@ if __name__ == '__main__':
     model.eval()
     print("✅ Modelo cargado")
 
-    def best_sensor():
-        max_samples= 0
-        best = states[0]
-        for st in states:
-            if max_samples< st.gyro_count:
-                max_samples = st.gyro_count
-                best = st
-            if max_samples< st.acc_count:
-                max_samples = st.acc_count
-                best = st
-        return best
-
+    
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
