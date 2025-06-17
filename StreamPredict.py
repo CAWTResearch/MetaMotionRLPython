@@ -79,9 +79,6 @@ class State:
         self.acc_count  = 0
         self.gyro_count = 0
         self.quat_count = 0
-        
-
-    
 
         # Remember each sensor's MAC (without colons) to name files
         mac_no_colon = device.address
@@ -115,8 +112,6 @@ class State:
 
         self.quat_count += 1
 
-
-
     def get_acc_cb(self):
         return self.acc_cb
 
@@ -126,8 +121,6 @@ class State:
     def get_quaternion_cb(self):
         return self.quaternion_cb
     
-
-
 
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
@@ -221,8 +214,6 @@ def configureNormal(states, N_Quantaty):
 
         NormalSensors.append((Sensor_Names[i],st))
         i+=1
-        
-
     return
 
 def subscribe_sensors():
@@ -230,7 +221,6 @@ def subscribe_sensors():
         st = Sensor[1]
         b = Sensor[1].device.board
         
-
         # Subscribe ACC
         sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
 
@@ -239,7 +229,6 @@ def subscribe_sensors():
         libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
   
         libmetawear.mbl_mw_acc_start(b)
-
 
         # Subscribe GYRO
         sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
@@ -261,11 +250,6 @@ def subscribe_sensors():
         libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_sensor_fusion_start(d.board)
 
-       
-
-        
-        
-
 # Configura y suscribe sensores por separado
 def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
     if Int_Quaternions + Int_Normals != len(states):
@@ -275,18 +259,7 @@ def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
     configureQuaternions(states, Int_Quaternions)
 
     subscribe_sensors()
-    return
-    
-
-
-
-
-
-
-
-
-    
-
+    return    
 
 # Desconexión limpia
 # Replace your old disconnect_sensors() with this:
