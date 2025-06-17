@@ -520,27 +520,25 @@ if __name__ == '__main__':
             if elapsedtime >= STREAM_DURATION:
                 print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
                 break
-            CombineData()
+            
             if len(buffer) >= 50:
-                buffer_data = list(buffer)
-
-                
+    
                 # === Preprocesamiento e inferencia ===
-                data_tensor = preprocess_data(buffer_data)
+                data_tensor = preprocess_data(buffer)
 
                 with torch.no_grad():
                     output = model(data_tensor)
                     probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                     prediction = int(torch.argmax(output, dim=1).item())
-                self.label.setText(f'Prediction: {self.class_names[prediction]}')
-                # print(f'🧠 Pred: {self.class_names[prediction]} | Prob: {probabilities}')
-                print(f'🧠 Pred: {self.class_names[prediction]}')
+
+                print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
 
                 # Move the buffer to the next window
                 for _ in range(25):
                     if buffer:  # Check if the deque is not empty
                         buffer.popleft()
+            CombineData()
 
 
             time.sleep(0.02)
