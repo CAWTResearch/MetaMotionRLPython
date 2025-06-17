@@ -21,6 +21,9 @@ from matplotlib.figure import Figure
 import joblib
 import numpy as np
 
+
+buffer = deque(maxlen=300)
+
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
 # device_macs = ['F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -241,7 +244,7 @@ def configureQuaternions(states, Q_Quantaty):
 
 def configureNormal(states, N_Quantaty):
 
-    Sensor_Names = ["n_chest", "n_left_hand", "n_right_knee"]
+    Sensor_Names = ["n_chest", "n_left_knee", "n_right_hand"]
 
 
     i = 0
@@ -456,6 +459,26 @@ class CNN_LSTM_Sensor(nn.Module):
         x = lstm_out[:, -1, :]   # Last time step
         return self.fc(x)
 
+def CombineData():
+
+
+
+    print("Current Order of sensors: " +  QuaternionSensors[0][0] + " " + QuaternionSensors[1][0] + " " + QuaternionSensors[2][0] + " " + NormalSensors[0][0] + " " + NormalSensors[1][0] + " " + NormalSensors[2][0])
+
+
+    Data = [QuaternionSensors[0][1].get_quat_W(), QuaternionSensors[0][1].get_quat_X(), QuaternionSensors[0][1].get_quat_Y(), QuaternionSensors[0][1].get_quat_Z(),
+            QuaternionSensors[1][1].get_quat_W(), QuaternionSensors[1][1].get_quat_X(), QuaternionSensors[1][1].get_quat_Y(), QuaternionSensors[1][1].get_quat_Z(),
+            QuaternionSensors[2][1].get_quat_W(), QuaternionSensors[2][1].get_quat_X(), QuaternionSensors[2][1].get_quat_Y(), QuaternionSensors[2][1].get_quat_Z(),
+            NormalSensors[0][1].get_acc_X(), NormalSensors[0][1].get_acc_Y(), NormalSensors[0][1].get_acc_Z(),
+            NormalSensors[0][1].get_gyro_X(), NormalSensors[0][1].get_gyro_Y(), NormalSensors[0][1].get_gyro_Z(),
+            NormalSensors[1][1].get_acc_X(), NormalSensors[1][1].get_acc_Y(), NormalSensors[1][1].get_acc_Z(),
+            NormalSensors[1][1].get_gyro_X(), NormalSensors[1][1].get_gyro_Y(), NormalSensors[1][1].get_gyro_Z(),
+            NormalSensors[2][1].get_acc_X(), NormalSensors[2][1].get_acc_Y(), NormalSensors[2][1].get_acc_Z(),
+            NormalSensors[2][1].get_gyro_X(), NormalSensors[2][1].get_gyro_Y(), NormalSensors[2][1].get_gyro_Z()]
+    
+    
+    
+
 
 # Main loop
 if __name__ == '__main__':
@@ -494,7 +517,9 @@ if __name__ == '__main__':
             if elapsedtime >= STREAM_DURATION:
                 print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
                 break
-            time.sleep(0.1)
+            
+            
+            time.sleep(1)
             print(f"{elapsedtime}")
         
     except KeyboardInterrupt:
