@@ -1,12 +1,25 @@
 from __future__ import print_function
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
+from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
-    FnVoid_VoidP_DataP, FnVoid_VoidP, 
+    FnVoid_VoidP_DataP,
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, datetime, os, csv, signal, sys, threading, glob
+from collections import deque
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
+from PyQt5.QtCore import QTimer
+import torch
+import torch.nn as nn
+from mbientlab.warble import *
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+import joblib
+import numpy as np
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -18,6 +31,12 @@ dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00
 # dongle_macs = ["00:E0:5C:48:01:70","00:E0:5C:48:02:38", "00:E0:5C:48:01:34", "00:E0:5C:48:0B:98", "00:E0:5C:48:00:DA"]
 
 states = []
+
+input_dim=30 
+cnn_out_channels=512 
+lstm_hidden=512 
+lstm_layers=2 
+output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
@@ -31,7 +50,7 @@ profiles = [
 
 
 # Asegura desconexión previa
-STREAM_DURATION = 600
+STREAM_DURATION = 60
 
 def force_disconnect_sensors():
     try:
@@ -361,7 +380,48 @@ def _do_reconnect(st, retries, backoff):
         print(f"[ERROR] Could not reconnect to {mac} after {retries} tries")
         return
 
+class CNN_LSTM_Sensor(nn.Module):
+    def __init__(self, input_dim, cnn_out_channels, lstm_hidden, lstm_layers, output_dim):
+        super(CNN_LSTM_Sensor, self).__init__()
 
+        self.cnn = nn.Sequential(
+            nn.Conv1d(input_dim, cnn_out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm1d(cnn_out_channels),
+            nn.ReLU(),
+
+            nn.Conv1d(cnn_out_channels, cnn_out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm1d(cnn_out_channels),
+            nn.ReLU(),
+
+            nn.Conv1d(cnn_out_channels, cnn_out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm1d(cnn_out_channels),
+            nn.ReLU(),
+
+            nn.MaxPool1d(kernel_size=2)
+        )
+
+        self.lstm = nn.LSTM(input_size=cnn_out_channels,
+                            hidden_size=lstm_hidden,
+                            num_layers=lstm_layers,
+                            batch_first=True)
+
+        self.fc = nn.Sequential(
+            nn.Linear(lstm_hidden, 128),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, output_dim)
+        )
+
+    def forward(self, x):
+        x = x.permute(0, 2, 1)   # (batch, time, features) → (batch, features, time)
+        x = self.cnn(x)
+        x = x.permute(0, 2, 1)   # CNN expects (batch, channels, time)
+                                 # (batch, time, channels) for LSTM
+        lstm_out, _ = self.lstm(x)
+        x = lstm_out[:, -1, :]   # Last time step
+        return self.fc(x)
 
 
 # Main loop
@@ -371,6 +431,28 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
+
+    # model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
+    model = CNN_LSTM_Sensor()
+    # Scaler
+    scaler = joblib.load("minmax_scaler.pkl")
+    print("✅ Scaler cargado")
+
+    model.load_state_dict(torch.load("best_model_89.pth", map_location=torch.device('cpu')))
+    model.eval()
+    print("✅ Modelo cargado")
+
+    def best_sensor():
+        max_samples= 0
+        best = states[0]
+        for st in states:
+            if max_samples< st.gyro_count:
+                max_samples = st.gyro_count
+                best = st
+            if max_samples< st.acc_count:
+                max_samples = st.acc_count
+                best = st
+        return best
 
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
