@@ -177,7 +177,6 @@ class State:
         return self.gyro_Z
     
     
-    
     def get_quat_W(self):
         return self.quat_W
     def get_quat_X(self):
@@ -186,8 +185,6 @@ class State:
         return self.quat_Y
     def get_quat_Z(self):
         return self.quat_Z
-
-
 
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
