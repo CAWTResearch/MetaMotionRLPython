@@ -220,7 +220,7 @@ def configureQuaternions(states, Q_Quantaty):
     Sensor_Names = ["q_chest", "q_left_hand", "q_right_knee"]
 
     i = 0
-    for st, settings in zip(states[len(NormalSensors)::len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors)::len(NormalSensors)+Q_Quantaty]):
+    for st, settings in zip(states[len(NormalSensors):len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors):len(NormalSensors)+Q_Quantaty]):
         d = st.device
         print("Configuring device Quaternion" + d.address)
 
@@ -252,7 +252,7 @@ def configureNormal(states, N_Quantaty):
 
 
     i = 0
-    for st, settings in zip(states[::N_Quantaty], profiles[::N_Quantaty]):
+    for st, settings in zip(states[:N_Quantaty], profiles[:N_Quantaty]):
         b = st.device.board
         print("Configuring device Quaternion" + st.device.address + " Type   :   " + Sensor_Names[i])
 
