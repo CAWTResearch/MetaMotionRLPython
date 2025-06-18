@@ -20,8 +20,9 @@ buffer = deque(maxlen=50)
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
-device_macs = ["F8:DC:C7:F1:48:7A", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9"]
-dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5']
+device_macs = ["F8:DC:C7:F1:48:7A", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C"]
+# dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
+dongle_macs = ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
 
 states = []
 
@@ -40,8 +41,9 @@ NormalSensors = []
 
 
 profiles = [
-    {"interval":25.0, "latency":5, "timeout":10000},
-    {"interval":30.0, "latency":4, "timeout":10000},
+    {"interval":8.75, "latency":5, "timeout":10000},
+    {"interval":10.0, "latency":6, "timeout":10000},
+    {"interval":11.25, "latency":4, "timeout":10000},
     {"interval":35.0, "latency":3, "timeout":10000},
     {"interval":40.0, "latency":2, "timeout":10000},
     {"interval":7.5, "latency":1, "timeout":10000},
@@ -211,9 +213,9 @@ def configureQuaternions(states, Q_Quantaty):
     Sensor_Names = ["q_chest", "q_left_hand", "q_right_knee"]
 
     i = 0
-    for st, settings in zip(states[len(NormalSensors)::len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors)::len(NormalSensors)+Q_Quantaty]):
+    for st, settings in zip(states[len(NormalSensors):len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors):len(NormalSensors)+Q_Quantaty]):
         d = st.device
-        print("Configuring device Quaternion" + d.address)
+        print("Configuring device Quaternion" + d.address + " Type   :   " + Sensor_Names[i])
 
         
         libmetawear.mbl_mw_settings_set_connection_parameters(
@@ -234,6 +236,7 @@ def configureQuaternions(states, Q_Quantaty):
         libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
         QuaternionSensors.append((Sensor_Names[i], st))
         i+=1
+        time.sleep(0.5)
     
     return 
 
@@ -243,17 +246,17 @@ def configureNormal(states, N_Quantaty):
 
 
     i = 0
-    for st, settings in zip(states[::N_Quantaty], profiles[::N_Quantaty]):
+    for st in states[0:N_Quantaty]:
+        print(str(len(states[0:N_Quantaty])))
         b = st.device.board
-        print("Configuring device Quaternion" + st.device.address + " Type   :   " + Sensor_Names[i])
-
+        print("Configuring device Normal " + st.device.address + " Type   :   " + Sensor_Names[i])
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
-            settings["interval"],   # min & max the same
-            settings["interval"],
-            settings["latency"],
-            settings["timeout"]
+            profiles[i]["interval"],   # min & max the same
+            profiles[i]["interval"],
+            profiles[i]["latency"],
+            profiles[i]["timeout"]
         )
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(b, 8)
@@ -304,7 +307,7 @@ def subscribe_sensors():
 
         
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(d.board, SensorFusionData.QUATERNION)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.quaternion_cb())
+        libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.get_quaternion_cb())
         libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_sensor_fusion_start(d.board)
 
@@ -312,7 +315,7 @@ def subscribe_sensors():
 def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
     if Int_Quaternions + Int_Normals != len(states):
         raise ValueError("The sum of Int_Quaternions and Int_Normals must equal the number of states.")
-    
+    print(str(len(states)) + " number of states")
     configureNormal(states, Int_Normals)
     configureQuaternions(states, Int_Quaternions)
 
@@ -445,7 +448,6 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-
     Data = [QuaternionSensors[0][1].get_quat_W(), QuaternionSensors[0][1].get_quat_X(), QuaternionSensors[0][1].get_quat_Y(), QuaternionSensors[0][1].get_quat_Z(),
             QuaternionSensors[1][1].get_quat_W(), QuaternionSensors[1][1].get_quat_X(), QuaternionSensors[1][1].get_quat_Y(), QuaternionSensors[1][1].get_quat_Z(),
             QuaternionSensors[2][1].get_quat_W(), QuaternionSensors[2][1].get_quat_X(), QuaternionSensors[2][1].get_quat_Y(), QuaternionSensors[2][1].get_quat_Z(),
@@ -473,9 +475,9 @@ if __name__ == '__main__':
     model = torch.jit.script(model)
 
     # Scaler
-    scaler = joblib.load("minmax_scaler.pkl")
+    scaler = joblib.load("scaler_model_full_model.pkl")
 
-    model.load_state_dict(torch.load("best_model_89.pth", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
     model.eval()
 
     
