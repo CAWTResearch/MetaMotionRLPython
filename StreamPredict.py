@@ -495,7 +495,9 @@ if __name__ == '__main__':
 
     try:
         target_dt = 1.0 / 50
+        prev_time = 0
         while True:
+            loop_start = time.perf_counter()
             if len(buffer) >= 50:
                 start_time = time.time()
                 # === Preprocesamiento e inferencia ===
@@ -510,13 +512,16 @@ if __name__ == '__main__':
 
                 print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
                 print(f"[inference] Latency: {latency:.4f}s")
+                DeltaT = time.time() - prev_time
+                print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+                prev_time = time.time() 
 
 
                 # Move the buffer to the next window
                 for _ in range(25):
                     if buffer:  # Check if the deque is not empty
-                        buffer.popleft()
-            loop_start = time.perf_counter()
+                        buffer.popleft()  
             CombineData()
 
 
