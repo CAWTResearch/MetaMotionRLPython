@@ -11,7 +11,8 @@ from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
-from multiprocessing import Process
+from threading import Thread
+
 
 import joblib
 import numpy as np
@@ -514,19 +515,12 @@ if __name__ == '__main__':
     try:
         target_dt = 1.0 / 50
         prev_time = 0
-        p1 = Process(target=get_prediction, args=(model,))
+        p1 = Thread(target=get_prediction, args=(model,))
 
         while True:
             loop_start = time.perf_counter()
             if len(buffer) >= 50:
                 
-                # # === Preprocesamiento e inferencia ===
-                # data_tensor = preprocess_data(buffer, scaler)
-
-                # with torch.no_grad():
-                #     output = model(data_tensor)
-                #     probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                #     prediction = int(torch.argmax(output, dim=1).item())
                 p1.start()
                 
                 DeltaT = time.time() - prev_time
