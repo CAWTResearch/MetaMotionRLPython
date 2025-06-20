@@ -494,7 +494,7 @@ if __name__ == '__main__':
         target_dt = 1.0 / 50
         while True:
             if len(buffer) >= 50:
-    
+                start_time = time.time()
                 # === Preprocesamiento e inferencia ===
                 data_tensor = preprocess_data(buffer, scaler)
 
@@ -502,8 +502,11 @@ if __name__ == '__main__':
                     output = model(data_tensor)
                     probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                     prediction = int(torch.argmax(output, dim=1).item())
+                end_time = time.time()
+                latency = (end_time - start_time)
 
                 print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+                print(f"[inference] Latency: {latency:.4f}s")
 
 
                 # Move the buffer to the next window
