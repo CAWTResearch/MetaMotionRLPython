@@ -34,6 +34,7 @@ def inference_loop(data_queue: Queue, result_queue: Queue, scaler_path: str, mod
     model.load_state_dict(torch.load(model_path, map_location="cpu"))
     model.eval()
     while True:
+        start_time = time.time()
         data = data_queue.get()
         if data is None:
             print("worker shutting down", flush=True)
@@ -59,6 +60,9 @@ def inference_loop(data_queue: Queue, result_queue: Queue, scaler_path: str, mod
         # 3) Send back result
         try:
             result_queue.put((pred, probs))
+            end_time = time.time()
+            latency = end_time - start_time
+            print(f"[inference] Pred: {pred}, Probs: {probs}, Latency: {latency:.4f}s", flush=True)
         except Exception as e:
             print(f"[queue put error] {e}", flush=True)
 
@@ -557,7 +561,7 @@ if __name__ == '__main__':
                     buffer.popleft()
                 # 3) wait for worker result
                 pred, probs = result_queue.get()
-                print(f"Predicción: {pred}, Probabilidades: {probs}")
+                # print(f"Predicción: {pred}, Probabilidades: {probs}")
 
             # keep your 50 Hz rate
             elapsed = time.perf_counter() - start
