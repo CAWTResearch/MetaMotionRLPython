@@ -3,19 +3,14 @@ from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP,
-    AccBmi270Odr, AccBoschRange,
+    AccBmi160Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, datetime, os, csv, signal, sys, threading, glob
+import subprocess, time, signal, sys, threading
 from collections import deque
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout
-from PyQt5.QtCore import QTimer
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
-
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 import joblib
 import numpy as np
@@ -25,11 +20,12 @@ buffer = deque(maxlen=50)
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
-device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "D5:42:DD:AC:BE:E1", "E6:4F:B9:D7:18:7C" ,"E6:AC:5E:B8:4C:D9"]
-dongle_macs = ['00:E0:5C:48:00:DA','00:E0:5C:48:01:63', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:03:93', '00:E0:5C:48:06:BD']
-# dongle_macs = ["00:E0:5C:48:01:70","00:E0:5C:48:02:38", "00:E0:5C:48:01:34", "00:E0:5C:48:0B:98", "00:E0:5C:48:00:DA"]
+device_macs = ["F8:DC:C7:F1:48:7A", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C"]
+# dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
+dongle_macs = ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
 
 states = []
+
 
 input_dim=30 
 cnn_out_channels=512 
@@ -39,16 +35,20 @@ output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
+# cnn_out_channels = 128
+# lstm_hidden = 256
+# lstm_layers = 1
+
+
 profiles = [
-    {"interval":25.0, "latency":5, "timeout":10000},
-    {"interval":30.0, "latency":4, "timeout":10000},
+    {"interval":8.75, "latency":5, "timeout":10000},
+    {"interval":10.0, "latency":6, "timeout":10000},
+    {"interval":11.25, "latency":4, "timeout":10000},
     {"interval":35.0, "latency":3, "timeout":10000},
     {"interval":40.0, "latency":2, "timeout":10000},
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
 
-# Asegura desconexión previa
-STREAM_DURATION = 60
 
 
 
@@ -155,8 +155,6 @@ class State:
     def get_quaternion_cb(self):
         return self.quaternion_cb
     
-
-
     
     def get_acc_Y(self):
         return self.acc_Y
@@ -192,8 +190,6 @@ def assign_sensors_to_dongles(devices, dongles):
         assign[dongles[i % len(dongles)]].append(mac)
     return assign
 
-# Conecta sensores y retorna instancias State
-
 def connect_sensors(devices, dongles, retries=10):
     for dongle, devs in assign_sensors_to_dongles(devices, dongles).items():
         for mac in devs:
@@ -219,7 +215,7 @@ def configureQuaternions(states, Q_Quantaty):
     i = 0
     for st, settings in zip(states[len(NormalSensors):len(NormalSensors)+Q_Quantaty], profiles[len(NormalSensors):len(NormalSensors)+Q_Quantaty]):
         d = st.device
-        print("Configuring device Quaternion" + d.address)
+        print("Configuring device Quaternion" + d.address + " Type   :   " + Sensor_Names[i])
 
         
         libmetawear.mbl_mw_settings_set_connection_parameters(
@@ -230,7 +226,7 @@ def configureQuaternions(states, Q_Quantaty):
             settings["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
+        libmetawear.mbl_mw_settings_set_tx_power(d.board, 4)
         time.sleep(1.5)
 
         # Configuración de Sensor Fusion
@@ -240,6 +236,7 @@ def configureQuaternions(states, Q_Quantaty):
         libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
         QuaternionSensors.append((Sensor_Names[i], st))
         i+=1
+        time.sleep(0.5)
     
     return 
 
@@ -249,32 +246,32 @@ def configureNormal(states, N_Quantaty):
 
 
     i = 0
-    for st, settings in zip(states[:N_Quantaty], profiles[:N_Quantaty]):
+    for st in states[0:N_Quantaty]:
+        print(str(len(states[0:N_Quantaty])))
         b = st.device.board
-        print("Configuring device Quaternion" + st.device.address + " Type   :   " + Sensor_Names[i])
-
+        print("Configuring device Normal " + st.device.address + " Type   :   " + Sensor_Names[i])
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
-            settings["interval"],   # min & max the same
-            settings["interval"],
-            settings["latency"],
-            settings["timeout"]
+            profiles[i]["interval"],   # min & max the same
+            profiles[i]["interval"],
+            profiles[i]["latency"],
+            profiles[i]["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
         time.sleep(1.5)
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
+        libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+        libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._50Hz)
+        libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._2000dps)
+        libmetawear.mbl_mw_gyro_bmi160_write_config(b)
 
         NormalSensors.append((Sensor_Names[i],st))
         i+=1
@@ -295,13 +292,13 @@ def subscribe_sensors():
         libmetawear.mbl_mw_acc_start(b)
 
         # Subscribe GYRO
-        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
 
         libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
 
-        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
 
-        libmetawear.mbl_mw_gyro_bmi270_start(b)
+        libmetawear.mbl_mw_gyro_bmi160_start(b)
 
     
     for Sensor in QuaternionSensors:
@@ -310,7 +307,7 @@ def subscribe_sensors():
 
         
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(d.board, SensorFusionData.QUATERNION)
-        libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.quaternion_cb())
+        libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.get_quaternion_cb())
         libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_sensor_fusion_start(d.board)
 
@@ -318,7 +315,7 @@ def subscribe_sensors():
 def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
     if Int_Quaternions + Int_Normals != len(states):
         raise ValueError("The sum of Int_Quaternions and Int_Normals must equal the number of states.")
-    
+    print(str(len(states)) + " number of states")
     configureNormal(states, Int_Normals)
     configureQuaternions(states, Int_Quaternions)
 
@@ -339,10 +336,10 @@ def disconnect_sensors():
 
 
         # 2) Stop gyro sampling
-        libmetawear.mbl_mw_gyro_bmi270_stop(b)
+        libmetawear.mbl_mw_gyro_bmi160_stop(b)
    
 
-        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(b)
   
         # 3) Unsubscribe from accel signal
         acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
@@ -351,13 +348,12 @@ def disconnect_sensors():
      
 
         # 4) Unsubscribe from gyro signal
-        gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+        gyro_signal = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
         
     for st in states:
 
-        print("Debug")
         # libmetawear.mbl_mw_debug_reset(st.device.board)
         time.sleep(2.0)
         # print("debugged")
@@ -368,7 +364,6 @@ def disconnect_sensors():
         # Give the board a moment to process each step
         time.sleep(1.0)
 
-    print("All disconnected")
 
 
 def reconfigure_and_subscribe(st, retries=5, backoff=1.0):
@@ -381,11 +376,9 @@ def _do_reconnect(st, retries, backoff):
     mac     = dev.address
     profile = st.profile
 
-    print(f"[WARN] Lost connection to {mac}.  Performing full reset…")
 
     # 1) One big board‐side reset clears out all streams & subscriptions
     if dev.is_connected:
-        print("No disconnect, I lied!")
         return
     try:
         dev.disconnect()
@@ -395,9 +388,6 @@ def _do_reconnect(st, retries, backoff):
     timeout = time.time() + 5.0
     while dev.is_connected and time.time() < timeout:
         time.sleep(0.05)
-    if dev.is_connected:
-        print(f"  • warning: disconnect() did not finish in time")
-
 
     # 3) Give BlueZ another moment
     time.sleep(backoff)
@@ -405,16 +395,13 @@ def _do_reconnect(st, retries, backoff):
     # 4) Retry connect() up to `retries` times
     for i in range(1, retries+1):
         try:
-            print("It reconnected Yahid!")
             dev.connect()
             if dev.is_connected:
-                print(f"[OK] Reconnected to {mac} on try #{i}")
                 break
         except Exception as e:
             print(f"  • connect #{i} failed: {e}")
         time.sleep(backoff)
     else:
-        print(f"[ERROR] Could not reconnect to {mac} after {retries} tries")
         return
 
 class CNN_LSTM_Sensor(nn.Module):
@@ -461,10 +448,6 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-
-    print("Current Order of sensors: " +  QuaternionSensors[0][0] + " " + QuaternionSensors[1][0] + " " + QuaternionSensors[2][0] + " " + NormalSensors[0][0] + " " + NormalSensors[1][0] + " " + NormalSensors[2][0])
-
-
     Data = [QuaternionSensors[0][1].get_quat_W(), QuaternionSensors[0][1].get_quat_X(), QuaternionSensors[0][1].get_quat_Y(), QuaternionSensors[0][1].get_quat_Z(),
             QuaternionSensors[1][1].get_quat_W(), QuaternionSensors[1][1].get_quat_X(), QuaternionSensors[1][1].get_quat_Y(), QuaternionSensors[1][1].get_quat_Z(),
             QuaternionSensors[2][1].get_quat_W(), QuaternionSensors[2][1].get_quat_X(), QuaternionSensors[2][1].get_quat_Y(), QuaternionSensors[2][1].get_quat_Z(),
@@ -489,14 +472,13 @@ if __name__ == '__main__':
     configure_and_subscribe_sensors(states, 3, 3)
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
-    
-    # Scaler
-    scaler = joblib.load("minmax_scaler.pkl")
-    print("✅ Scaler cargado")
+    model = torch.jit.script(model)
 
-    model.load_state_dict(torch.load("best_model_89.pth", map_location=torch.device('cpu')))
+    # Scaler
+    scaler = joblib.load("scaler_model_full_model.pkl")
+
+    model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
     model.eval()
-    print("✅ Modelo cargado")
 
     
     # d) Allow Ctrl+C to abort early
@@ -508,16 +490,9 @@ if __name__ == '__main__':
 
     signal.signal(signal.SIGINT, on_exit)
 
-    # e) Timer loop
-    print(f"Streaming 50 Hz from each sensor for {STREAM_DURATION} seconds…")
-    start_ts = time.time()
     try:
+        target_dt = 1.0 / 50
         while True:
-            elapsedtime= time.time()-start_ts
-            if elapsedtime >= STREAM_DURATION:
-                print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
-                break
-            
             if len(buffer) >= 50:
     
                 # === Preprocesamiento e inferencia ===
@@ -535,11 +510,14 @@ if __name__ == '__main__':
                 for _ in range(25):
                     if buffer:  # Check if the deque is not empty
                         buffer.popleft()
+            loop_start = time.perf_counter()
             CombineData()
 
 
-            time.sleep(0.02)
-            print(f"{elapsedtime}")
+            elapsed = time.perf_counter() - loop_start
+            remaining = target_dt - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
