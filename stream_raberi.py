@@ -80,7 +80,7 @@ def force_disconnect_sensors():
                 for d in dlist:
                     subprocess.run(["bluetoothctl", "disconnect", mac], capture_output=True)
                     subprocess.run(["bluetoothctl", "remove", mac], capture_output=True)
-        subprocess.run(["rfkill", "unblock", "bluetooth"])
+        subprocess.run(["sudo","rfkill", "unblock", "bluetooth"])
         time.sleep(2)
     except Exception:
         pass
@@ -467,19 +467,35 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    start_time = time.time()
-    data_tensor = preprocess_data(buffer, scaler)
+    prev_time = 0
+    while True:
+        if len(buffer) >= 50:
+            start_time = time.time()
+            data_tensor = preprocess_data(buffer, scaler)
 
-    with torch.no_grad():
-        output = model(data_tensor)
-        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-        prediction = int(torch.argmax(output, dim=1).item())
+            with torch.no_grad():
+                output = model(data_tensor)
+                probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                prediction = int(torch.argmax(output, dim=1).item())
 
-    print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
-    end_time = time.time()
-    latency = (end_time - start_time)
+            print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+            end_time = time.time()
+            latency = (end_time - start_time)
 
-    print(f"[inference] Latency: {latency:.4f}s")
+            print(f"[inference] Latency: {latency:.4f}s")
+
+            DeltaT = time.time() - prev_time
+            print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+            prev_time = time.time() 
+
+            for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()  
+
+            
+    
+    
 
     return
 
@@ -514,25 +530,13 @@ if __name__ == '__main__':
 
     try:
         target_dt = 1.0 / 50
-        prev_time = 0
+        
         p1 = Thread(target=get_prediction, args=(model,))
+        p1.start()
 
         while True:
             loop_start = time.perf_counter()
-            if len(buffer) >= 50:
                 
-                p1.start()
-                
-                DeltaT = time.time() - prev_time
-                print(f"[inference] DeltaT: {DeltaT:.4f}s")
-
-                prev_time = time.time() 
-
-
-                # Move the buffer to the next window
-                for _ in range(25):
-                    if buffer:  # Check if the deque is not empty
-                        buffer.popleft()  
             CombineData()
 
 
