@@ -11,7 +11,7 @@ from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
-from threading import Thread
+from multiprocessing import Process
 
 
 import joblib
@@ -531,7 +531,8 @@ if __name__ == '__main__':
     try:
         target_dt = 1.0 / 50
         
-        p1 = Thread(target=get_prediction, args=(model,))
+        p1 = Process(target=get_prediction, args=(model,))
+
         p1.start()
 
         while True:
