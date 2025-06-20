@@ -514,7 +514,7 @@ if __name__ == '__main__':
     try:
         target_dt = 1.0 / 50
         prev_time = 0
-        p1 = Process(target=get_prediction, args=(model))
+        p1 = Process(target=get_prediction, args=(model,))
 
         while True:
             loop_start = time.perf_counter()
