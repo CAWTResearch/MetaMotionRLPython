@@ -1,5 +1,4 @@
 from __future__ import print_function
-import multiprocessing as mp
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
@@ -8,64 +7,17 @@ from mbientlab.metawear.cbindings import (
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, signal, sys, threading
-from multiprocessing import Process, Queue
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
+from multiprocessing import Process
 
 import joblib
 import numpy as np
 
 
 buffer = deque(maxlen=50)
-result_queue = Queue()
-
-
-def inference_loop(data_queue: Queue, result_queue: Queue, scaler_path: str, model_path: str):
-    scaler = joblib.load(scaler_path)
-    model = CNN_LSTM_Sensor(
-        input_dim=input_dim,
-        cnn_out_channels=cnn_out_channels,
-        lstm_hidden=lstm_hidden,
-        lstm_layers=lstm_layers,
-        output_dim=output_dim
-    )
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
-    model.eval()
-    while True:
-        start_time = time.time()
-        data = data_queue.get()
-        if data is None:
-            print("worker shutting down", flush=True)
-            break
-
-        # 1) Preprocess
-        try:
-            data_tensor = preprocess_data(data, scaler)
-        except Exception as e:
-            print(f"[preprocess error] {e}", flush=True)
-            continue
-
-        # 2) Model inference
-        try:
-            with torch.no_grad():
-                output = model(data_tensor)
-
-            probs = torch.softmax(output, dim=1).squeeze().tolist()
-            pred  = int(torch.argmax(output, dim=1).item())
-        except Exception as e:
-            continue
-
-        # 3) Send back result
-        try:
-            result_queue.put((pred, probs))
-            end_time = time.time()
-            latency = (end_time - start_time)
-            print(f"[inference] Pred: {pred}, Probs: {probs}, Latency: {latency:.4f}s", flush=True)
-        except Exception as e:
-            print(f"[queue put error] {e}", flush=True)
-
 
 # Sensor y dongle MACs
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
@@ -74,7 +26,8 @@ device_macs = ["FA:F1:20:99:CB:B4", "F9:8C:1E:4A:F5:D0", "CE:94:48:FE:5D:C5", "E
 
 # dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
 dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
-# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
+# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA'] ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
+
 states = []
 
 
@@ -160,6 +113,8 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
+
+
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
@@ -169,6 +124,7 @@ class State:
         self.acc_Z = z
 
         self.acc_count += 1
+
 
     def gyro_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
@@ -274,7 +230,7 @@ def configureQuaternions(states, Q_Quantaty):
             settings["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
+        libmetawear.mbl_mw_settings_set_tx_power(d.board, 4)
         time.sleep(1.5)
 
         # Configuración de Sensor Fusion
@@ -509,11 +465,29 @@ def CombineData():
     buffer.append(Data)
     return 
 
+def get_prediction(model):
+    start_time = time.time()
+    data_tensor = preprocess_data(buffer, scaler)
+
+    with torch.no_grad():
+        output = model(data_tensor)
+        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+        prediction = int(torch.argmax(output, dim=1).item())
+
+    print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+    end_time = time.time()
+    latency = (end_time - start_time)
+
+    print(f"[inference] Latency: {latency:.4f}s")
+
+    return
+
 
 
 # Main loop
 if __name__ == '__main__':
-    mp.set_start_method('spawn', force=True)
+
+
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
@@ -531,47 +505,54 @@ if __name__ == '__main__':
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
-        data_queue.put(None)
-        p.join()
         disconnect_sensors()
-        
+
         sys.exit(0)
 
     signal.signal(signal.SIGINT, on_exit)
 
-    data_queue   = Queue()
-    result_queue = Queue()
-    p = Process(target=inference_loop, args=(data_queue, result_queue, "scaler_model_full_model.pkl", "cnn_lstm_fold1.pth"))
-    p.start()
     try:
         target_dt = 1.0 / 50
+        prev_time = 0
+        p1 = Process(target=get_prediction, args=(model))
+
         while True:
-            start = time.perf_counter()
+            loop_start = time.perf_counter()
+            if len(buffer) >= 50:
+                
+                # # === Preprocesamiento e inferencia ===
+                # data_tensor = preprocess_data(buffer, scaler)
+
+                # with torch.no_grad():
+                #     output = model(data_tensor)
+                #     probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                #     prediction = int(torch.argmax(output, dim=1).item())
+                p1.start()
+                
+                DeltaT = time.time() - prev_time
+                print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+                prev_time = time.time() 
+
+
+                # Move the buffer to the next window
+                for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()  
             CombineData()
 
 
-            if len(buffer) >= 50:
-                # 1) snapshot & send to worker
-                snapshot = list(buffer)
-                data_queue.put(snapshot)
+            elapsed = time.perf_counter() - loop_start
+            remaining = target_dt - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+        
+    except KeyboardInterrupt:
+        # If user presses Ctrl+C during the timer, on_exit will run
+        pass
 
-                # 2) slide window
-                for _ in range(25):
-                    buffer.popleft()
-                # 3) wait for worker result
-                pred, probs = result_queue.get()
-                # print(f"Predicción: {pred}, Probabilidades: {probs}")
+    # f) Timer done → clean up & dump
+    disconnect_sensors()
 
-            # keep your 50 Hz rate
-            elapsed = time.perf_counter() - start
-            if elapsed < target_dt:
-                
-                time.sleep(target_dt - elapsed)
-
-    finally:
-        # signal worker to exit
-        data_queue.put(None)
-        p.join()
-        disconnect_sensors()
-        print("All done. Exiting.")
-        sys.exit(0)
+    print("All done. Exiting.")
+    sys.exit(0)
