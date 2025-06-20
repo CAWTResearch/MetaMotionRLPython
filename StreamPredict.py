@@ -78,7 +78,7 @@ def force_disconnect_sensors():
                 for d in dlist:
                     subprocess.run(["bluetoothctl", "disconnect", mac], capture_output=True)
                     subprocess.run(["bluetoothctl", "remove", mac], capture_output=True)
-        subprocess.run(["rfkill", "unblock", "bluetooth"])
+        subprocess.run(["sudo","rfkill", "unblock", "bluetooth"])
         time.sleep(2)
     except Exception:
         pass
