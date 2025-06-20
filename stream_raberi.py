@@ -61,7 +61,7 @@ def inference_loop(data_queue: Queue, result_queue: Queue, scaler_path: str, mod
         try:
             result_queue.put((pred, probs))
             end_time = time.time()
-            latency = end_time - start_time
+            latency = (end_time - start_time)
             print(f"[inference] Pred: {pred}, Probs: {probs}, Latency: {latency:.4f}s", flush=True)
         except Exception as e:
             print(f"[queue put error] {e}", flush=True)
@@ -548,7 +548,6 @@ if __name__ == '__main__':
         while True:
             start = time.perf_counter()
             CombineData()
-            print(len(buffer))
 
 
             if len(buffer) >= 50:
@@ -565,7 +564,6 @@ if __name__ == '__main__':
 
             # keep your 50 Hz rate
             elapsed = time.perf_counter() - start
-            print(elapsed)
             if elapsed < target_dt:
                 
                 time.sleep(target_dt - elapsed)
