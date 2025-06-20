@@ -22,7 +22,7 @@ buffer = deque(maxlen=50)
 # device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
 device_macs = ["F8:DC:C7:F1:48:7A", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C"]
 # dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
-dongle_macs = ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
 
 states = []
 
@@ -109,8 +109,6 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
-
-
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
@@ -120,7 +118,6 @@ class State:
         self.acc_Z = z
 
         self.acc_count += 1
-
 
     def gyro_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
