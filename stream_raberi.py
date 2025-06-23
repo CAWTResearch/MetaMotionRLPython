@@ -470,7 +470,17 @@ def CombineData():
 def get_prediction(model):
     prev_time = 0
     scaler = joblib.load("scaler_model_full_model.pkl")
-    model = torch.jit.load("cnn_lstm_fold1.pth")  # or however you load
+
+    # 2) Rebuild & load your model
+    model = CNN_LSTM_Sensor(
+        input_dim=input_dim,
+        cnn_out_channels=cnn_out_channels,
+        lstm_hidden=lstm_hidden,
+        lstm_layers=lstm_layers,
+        output_dim=output_dim
+    )
+    state = torch.load("cnn_lstm_fold1.pth", map_location="cpu")
+    model.load_state_dict(state)
     model.eval()
     while True:
         if len(buffer) >= 50:
