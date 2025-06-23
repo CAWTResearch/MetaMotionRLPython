@@ -495,32 +495,34 @@ if __name__ == '__main__':
     try:
         target_dt = 1.0 / 50
         prev_time = 0
-        next_call = time.time()
-        infer_interval = 0.5 
         while True:
             loop_start = time.perf_counter()
+            if len(buffer) >= 50:
+                start_time = time.time()
+                # === Preprocesamiento e inferencia ===
+                data_tensor = preprocess_data(buffer, scaler)
+
+                with torch.no_grad():
+                    output = model(data_tensor)
+                    probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                    prediction = int(torch.argmax(output, dim=1).item())
+                end_time = time.time()
+                latency = (end_time - start_time)
+
+                print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+                print(f"[inference] Latency: {latency:.4f}s")
+                DeltaT = time.time() - prev_time
+                print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+                prev_time = time.time() 
+
+
+                # Move the buffer to the next window
+                for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()  
             CombineData()
-            now = time.time()
-            if now>=next_call:
-                next_call =time.time() + infer_interval
-                if len(buffer) == buffer.maxlen:
-                    start_time = time.time()
-                    # === Preprocesamiento e inferencia ===
-                    data_tensor = preprocess_data(buffer, scaler)
 
-                    with torch.no_grad():
-                        output = model(data_tensor)
-                        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                        prediction = int(torch.argmax(output, dim=1).item())
-                    end_time = time.time()
-                    latency = (end_time - start_time)
-
-                    print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
-                    print(f"[inference] Latency: {latency:.4f}s")
-                    DeltaT = time.time() - prev_time
-                    print(f"[inference] DeltaT: {DeltaT:.4f}s")
-
-                    prev_time = time.time() 
 
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
