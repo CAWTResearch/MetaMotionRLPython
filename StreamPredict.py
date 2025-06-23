@@ -502,7 +502,7 @@ if __name__ == '__main__':
             CombineData()
             now = time.time()
             if now>=next_call:
-                next_call += infer_interval
+                next_call =time.time() + infer_interval
                 if len(buffer) == buffer.maxlen:
                     start_time = time.time()
                     # === Preprocesamiento e inferencia ===
