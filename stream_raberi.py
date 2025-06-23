@@ -492,12 +492,7 @@ def get_prediction(model):
             for _ in range(25):
                     if buffer:  # Check if the deque is not empty
                         buffer.popleft()  
-
-            
-    
-    
-
-    return
+        print("not yet")
 
 
 
@@ -531,6 +526,7 @@ if __name__ == '__main__':
     signal.signal(signal.SIGINT, on_exit)
 
     try:
+        print("tried")
         target_dt = 1.0 / 50
         
         p1 = Process(target=get_prediction, args=(model,))
