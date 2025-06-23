@@ -469,43 +469,32 @@ def CombineData():
 
 def get_prediction(model):
     prev_time = 0
-    scaler = joblib.load("scaler_model_full_model.pkl")
-
-    # 2) Rebuild & load your model
-    model = CNN_LSTM_Sensor(
-        input_dim=input_dim,
-        cnn_out_channels=cnn_out_channels,
-        lstm_hidden=lstm_hidden,
-        lstm_layers=lstm_layers,
-        output_dim=output_dim
-    )
-    state = torch.load("cnn_lstm_fold1.pth", map_location="cpu")
-    model.load_state_dict(state)
-    model.eval()
+    next_call = time.time()
+    infer_interval = 0.5
     while True:
-        if len(buffer) >= 50:
-            start_time = time.time()
-            data_tensor = preprocess_data(buffer, scaler)
+        now = time.time()
+        if now>=next_call:
+            next_call =time.time() + infer_interval
+            if len(buffer) == buffer.maxlen:
+                start_time = time.time()
+                data_tensor = preprocess_data(buffer, scaler)
 
-            with torch.no_grad():
-                output = model(data_tensor)
-                probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                prediction = int(torch.argmax(output, dim=1).item())
+                with torch.no_grad():
+                    output = model(data_tensor)
+                    probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                    prediction = int(torch.argmax(output, dim=1).item())
 
-            print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
-            end_time = time.time()
-            latency = (end_time - start_time)
+                print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+                end_time = time.time()
+                latency = (end_time - start_time)
 
-            print(f"[inference] Latency: {latency:.4f}s")
+                print(f"[inference] Latency: {latency:.4f}s")
 
-            DeltaT = time.time() - prev_time
-            print(f"[inference] DeltaT: {DeltaT:.4f}s")
+                DeltaT = time.time() - prev_time
+                print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-            prev_time = time.time() 
+                prev_time = time.time() 
 
-            for _ in range(25):
-                    if buffer:  # Check if the deque is not empty
-                        buffer.popleft()  
 
 
 
@@ -553,7 +542,6 @@ if __name__ == '__main__':
             loop_start = time.perf_counter()
                 
             CombineData()
-
 
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
