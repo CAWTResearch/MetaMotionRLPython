@@ -504,10 +504,10 @@ def get_prediction(model):
 # Main loop
 if __name__ == '__main__':
 
-
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
+    print("✅ All sensors configured & subscribed", flush=True)
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
     model = torch.jit.script(model)
