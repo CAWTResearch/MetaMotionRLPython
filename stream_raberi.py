@@ -542,12 +542,12 @@ if __name__ == '__main__':
         print("tried")
         target_dt = 1.0 / 50
         
-        p1 = Process(target=get_prediction, args=(model,))
+        # p1 = Process(target=get_prediction, args=(model,))
 
-        p1.start()
+        # p1.start()
 
-        # t1 = Thread(target=get_prediction, args=(model,), daemon=True)
-        # t1.start()
+        t1 = Thread(target=get_prediction, args=(model,), daemon=True)
+        t1.start()
 
         while True:
             loop_start = time.perf_counter()
