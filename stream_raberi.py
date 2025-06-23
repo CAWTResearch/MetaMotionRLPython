@@ -507,17 +507,19 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
-    print("✅ All sensors configured & subscribed", flush=True)
+    print("All sensors configured & subscribed")
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
     model = torch.jit.script(model)
+    print("modeled")
 
     # Scaler
     scaler = joblib.load("scaler_model_full_model.pkl")
+    print("Scaled")
 
     model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
     model.eval()
-
+    print("Modeled again")
     
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
