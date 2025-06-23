@@ -15,6 +15,7 @@ from mbientlab.warble import *
 import joblib
 import numpy as np
 
+
 buffer = deque(maxlen=50)
 
 # Sensor y dongle MACs
@@ -26,6 +27,7 @@ dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '0
 # dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA'] ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
 
 states = []
+
 
 input_dim=30 
 cnn_out_channels=512 
@@ -39,6 +41,7 @@ NormalSensors = []
 # lstm_hidden = 256
 # lstm_layers = 1
 
+
 profiles = [
     {"interval":8.75, "latency":5, "timeout":10000},
     {"interval":10.0, "latency":6, "timeout":10000},
@@ -47,6 +50,8 @@ profiles = [
     {"interval":40.0, "latency":2, "timeout":10000},
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
+
+
 
 
 def preprocess_data(buffer, scaler):
@@ -106,6 +111,7 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
+
 
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
@@ -476,6 +482,7 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
     model.eval()
 
+    
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
@@ -484,35 +491,33 @@ if __name__ == '__main__':
         sys.exit(0)
 
     signal.signal(signal.SIGINT, on_exit)
+
     try:
         target_dt = 1.0 / 50
         prev_time = 0
-        next_call = time.time()
-        infer_interval = 0.5 
         while True:
             loop_start = time.perf_counter()
             CombineData()
             now = time.time()
-            if now>=next_call:
-                next_call =time.time() + infer_interval
-                if len(buffer) == buffer.maxlen:
-                    start_time = time.time()
-                    # === Preprocesamiento e inferencia ===
-                    data_tensor = preprocess_data(buffer, scaler)
+            if len(buffer) >= 50:
+                start_time = time.time()
+                # === Preprocesamiento e inferencia ===
+                data_tensor = preprocess_data(buffer, scaler)
 
-                    with torch.no_grad():
-                        output = model(data_tensor)
-                        probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                        prediction = int(torch.argmax(output, dim=1).item())
-                    end_time = time.time()
-                    latency = (end_time - start_time)
+                with torch.no_grad():
+                    output = model(data_tensor)
+                    probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                    prediction = int(torch.argmax(output, dim=1).item())
+                end_time = time.time()
+                latency = (end_time - start_time)
 
-                    print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
-                    print(f"[inference] Latency: {latency:.4f}s")
-                    DeltaT = time.time() - prev_time
-                    print(f"[inference] DeltaT: {DeltaT:.4f}s")
+                print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+                print(f"[inference] Latency: {latency:.4f}s")
+                DeltaT = time.time() - prev_time
+                print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-                    prev_time = time.time() 
+                prev_time = time.time() 
+
 
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
