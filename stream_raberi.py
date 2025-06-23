@@ -469,6 +469,9 @@ def CombineData():
 
 def get_prediction(model):
     prev_time = 0
+    scaler = joblib.load("scaler_model_full_model.pkl")
+    model = torch.jit.load("cnn_lstm_fold1.pth")  # or however you load
+    model.eval()
     while True:
         if len(buffer) >= 50:
             start_time = time.time()
@@ -493,8 +496,6 @@ def get_prediction(model):
             for _ in range(25):
                     if buffer:  # Check if the deque is not empty
                         buffer.popleft()  
-        print("not yet")
-        time.sleep(0.5)
 
 
 
@@ -531,9 +532,13 @@ if __name__ == '__main__':
         print("tried")
         target_dt = 1.0 / 50
         
-        t1 = Thread(target=get_prediction, args=(model,), daemon=True)
-        t1.start()
-        
+        p1 = Process(target=get_prediction, args=(model,))
+
+        p1.start()
+
+        # t1 = Thread(target=get_prediction, args=(model,), daemon=True)
+        # t1.start()
+
         while True:
             loop_start = time.perf_counter()
                 
