@@ -1,76 +1,35 @@
 from __future__ import print_function
-import multiprocessing as mp
 from mbientlab.metawear import MetaWear, libmetawear, parse_value
 from mbientlab.metawear.cbindings import *
 from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_DataP,
-    AccBmi160Odr, AccBoschRange,
+    AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
 import subprocess, time, signal, sys, threading
-from multiprocessing import Process, Queue
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
+from multiprocessing import Process
+from threading import Thread
+
 
 import joblib
 import numpy as np
 
 
 buffer = deque(maxlen=50)
-result_queue = Queue()
-
-
-def inference_loop(data_queue: Queue, result_queue: Queue, scaler_path: str, model_path: str):
-    scaler = joblib.load(scaler_path)
-    model = CNN_LSTM_Sensor(
-        input_dim=input_dim,
-        cnn_out_channels=cnn_out_channels,
-        lstm_hidden=lstm_hidden,
-        lstm_layers=lstm_layers,
-        output_dim=output_dim
-    )
-    model.load_state_dict(torch.load(model_path, map_location="cpu"))
-    model.eval()
-    while True:
-        data = data_queue.get()
-        if data is None:
-            print("worker shutting down", flush=True)
-            break
-
-        # 1) Preprocess
-        try:
-            data_tensor = preprocess_data(data, scaler)
-        except Exception as e:
-            print(f"[preprocess error] {e}", flush=True)
-            continue
-
-        # 2) Model inference
-        try:
-            with torch.no_grad():
-                output = model(data_tensor)
-
-            probs = torch.softmax(output, dim=1).squeeze().tolist()
-            pred  = int(torch.argmax(output, dim=1).item())
-        except Exception as e:
-            continue
-
-        # 3) Send back result
-        try:
-            result_queue.put((pred, probs))
-        except Exception as e:
-            print(f"[queue put error] {e}", flush=True)
-
 
 # Sensor y dongle MACs
-# device_macs = ["F0:3D:E7:ED:F6:F7", "CE:5A:39:E6:8F:B3", "E6:AC:5E:B8:4C:D9",'F8:DC:C7:F1:48:7A',"E6:4F:B9:D7:18:7C"]
-# device_macs = ["F8:DC:C7:F1:48:7A", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C"] #NEW
-device_macs = ["FA:F1:20:99:CB:B4", "F9:8C:1E:4A:F5:D0", "CE:94:48:FE:5D:C5", "EC:57:2E:32:05:52", "F1:1E:E2:6F:1D:E1", "EE:1B:72:FA:BF:E8"] #OLD
+
+# device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
+device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
 # dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
 dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
-# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
+# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA'] ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
+
 states = []
 
 
@@ -122,7 +81,7 @@ def force_disconnect_sensors():
                 for d in dlist:
                     subprocess.run(["bluetoothctl", "disconnect", mac], capture_output=True)
                     subprocess.run(["bluetoothctl", "remove", mac], capture_output=True)
-        subprocess.run(["rfkill", "unblock", "bluetooth"])
+        subprocess.run(["sudo","rfkill", "unblock", "bluetooth"])
         time.sleep(2)
     except Exception:
         pass
@@ -156,6 +115,8 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
+
+
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
         x, y, z = val.x, val.y, val.z
@@ -165,6 +126,7 @@ class State:
         self.acc_Z = z
 
         self.acc_count += 1
+
 
     def gyro_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
@@ -270,7 +232,7 @@ def configureQuaternions(states, Q_Quantaty):
             settings["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
+        libmetawear.mbl_mw_settings_set_tx_power(d.board, 4)
         time.sleep(1.5)
 
         # Configuración de Sensor Fusion
@@ -307,15 +269,15 @@ def configureNormal(states, N_Quantaty):
         time.sleep(1.5)
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._50Hz)
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._50Hz)
-        libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._2000dps)
-        libmetawear.mbl_mw_gyro_bmi160_write_config(b)
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
+        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
         NormalSensors.append((Sensor_Names[i],st))
         i+=1
@@ -336,13 +298,13 @@ def subscribe_sensors():
         libmetawear.mbl_mw_acc_start(b)
 
         # Subscribe GYRO
-        sig_g = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
+        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
 
         libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
 
-        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
 
-        libmetawear.mbl_mw_gyro_bmi160_start(b)
+        libmetawear.mbl_mw_gyro_bmi270_start(b)
 
     
     for Sensor in QuaternionSensors:
@@ -380,10 +342,10 @@ def disconnect_sensors():
 
 
         # 2) Stop gyro sampling
-        libmetawear.mbl_mw_gyro_bmi160_stop(b)
+        libmetawear.mbl_mw_gyro_bmi270_stop(b)
    
 
-        libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(b)
+        libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
   
         # 3) Unsubscribe from accel signal
         acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
@@ -392,7 +354,7 @@ def disconnect_sensors():
      
 
         # 4) Unsubscribe from gyro signal
-        gyro_signal = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
+        gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
         
@@ -505,71 +467,105 @@ def CombineData():
     buffer.append(Data)
     return 
 
+def get_prediction(model):
+    prev_time = 0
+    scaler = joblib.load("scaler_model_full_model.pkl")
+
+    # 2) Rebuild & load your model
+    model = CNN_LSTM_Sensor(
+        input_dim=input_dim,
+        cnn_out_channels=cnn_out_channels,
+        lstm_hidden=lstm_hidden,
+        lstm_layers=lstm_layers,
+        output_dim=output_dim
+    )
+    state = torch.load("cnn_lstm_fold1.pth", map_location="cpu")
+    model.load_state_dict(state)
+    model.eval()
+    while True:
+        if len(buffer) >= 50:
+            start_time = time.time()
+            data_tensor = preprocess_data(buffer, scaler)
+
+            with torch.no_grad():
+                output = model(data_tensor)
+                probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                prediction = int(torch.argmax(output, dim=1).item())
+
+            print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
+            end_time = time.time()
+            latency = (end_time - start_time)
+
+            print(f"[inference] Latency: {latency:.4f}s")
+
+            DeltaT = time.time() - prev_time
+            print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+            prev_time = time.time() 
+
+            for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()  
+
 
 
 # Main loop
 if __name__ == '__main__':
-    mp.set_start_method('spawn', force=True)
+
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
+    print("All sensors configured & subscribed")
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
     model = torch.jit.script(model)
+    print("modeled")
 
     # Scaler
     scaler = joblib.load("scaler_model_full_model.pkl")
+    print("Scaled")
 
     model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
     model.eval()
-
+    print("Modeled again")
     
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
-        data_queue.put(None)
-        p.join()
         disconnect_sensors()
-        
+
         sys.exit(0)
 
     signal.signal(signal.SIGINT, on_exit)
 
-    data_queue   = Queue()
-    result_queue = Queue()
-    p = Process(target=inference_loop, args=(data_queue, result_queue, "scaler_model_full_model.pkl", "cnn_lstm_fold1.pth"))
-    p.start()
     try:
+        print("tried")
         target_dt = 1.0 / 50
+        
+        p1 = Process(target=get_prediction, args=(model,))
+
+        p1.start()
+
+        # t1 = Thread(target=get_prediction, args=(model,), daemon=True)
+        # t1.start()
+
         while True:
-            start = time.perf_counter()
-            CombineData()
-            print(len(buffer))
-
-
-            if len(buffer) >= 50:
-                # 1) snapshot & send to worker
-                snapshot = list(buffer)
-                data_queue.put(snapshot)
-
-                # 2) slide window
-                for _ in range(25):
-                    buffer.popleft()
-                # 3) wait for worker result
-                pred, probs = result_queue.get()
-                print(f"Predicción: {pred}, Probabilidades: {probs}")
-
-            # keep your 50 Hz rate
-            elapsed = time.perf_counter() - start
-            print(elapsed)
-            if elapsed < target_dt:
+            loop_start = time.perf_counter()
                 
-                time.sleep(target_dt - elapsed)
+            CombineData()
 
-    finally:
-        # signal worker to exit
-        data_queue.put(None)
-        p.join()
-        disconnect_sensors()
-        print("All done. Exiting.")
-        sys.exit(0)
+
+            elapsed = time.perf_counter() - loop_start
+            remaining = target_dt - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+        
+    except KeyboardInterrupt:
+        # If user presses Ctrl+C during the timer, on_exit will run
+        pass
+
+    # f) Timer done → clean up & dump
+    disconnect_sensors()
+
+    print("All done. Exiting.")
+    sys.exit(0)
