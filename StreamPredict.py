@@ -497,8 +497,6 @@ if __name__ == '__main__':
         prev_time = 0
         while True:
             loop_start = time.perf_counter()
-            CombineData()
-            now = time.time()
             if len(buffer) >= 50:
                 start_time = time.time()
                 # === Preprocesamiento e inferencia ===
@@ -517,6 +515,13 @@ if __name__ == '__main__':
                 print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
                 prev_time = time.time() 
+
+
+                # Move the buffer to the next window
+                for _ in range(25):
+                    if buffer:  # Check if the deque is not empty
+                        buffer.popleft()  
+            CombineData()
 
 
             elapsed = time.perf_counter() - loop_start
