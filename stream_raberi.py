@@ -20,6 +20,7 @@ import numpy as np
 
 
 buffer = deque(maxlen=50)
+combinecounter = 0
 
 # Sensor y dongle MACs
 
@@ -473,7 +474,7 @@ def get_prediction(model):
     infer_interval = 0.5
     while True:
         now = time.time()
-        if now>=next_call:
+        if len(buffer)>=50 and combinecounter>=25:
             next_call =time.time() + infer_interval
             if len(buffer) == buffer.maxlen:
                 start_time = time.time()
@@ -494,8 +495,6 @@ def get_prediction(model):
                 print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
                 prev_time = time.time() 
-
-
 
 
 # Main loop
@@ -540,9 +539,11 @@ if __name__ == '__main__':
 
         while True:
             loop_start = time.perf_counter()
-                
+            
             CombineData()
-
+            combinecounter+=1
+            if combinecounter>25:
+                combinecounter=1
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
