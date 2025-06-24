@@ -479,10 +479,10 @@ def get_prediction(model):
                 prediction = int(torch.argmax(output, dim=1).item())
 
             end_time = time.perf_counter_ns()
-            DeltaT = end_time - prev_time
-            latency = (end_time - start_time)
+            DeltaT = (end_time - prev_time)/1000000000
+            latency = (end_time - start_time)/1000000000
 
-            wait    = (end_time - prev_time) - (end_time - start_time)
+            wait    = ((end_time - prev_time) - (end_time - start_time))/1000000000
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
