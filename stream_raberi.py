@@ -472,7 +472,7 @@ def get_prediction(model):
     prev_time = 0
     while True:
         if len(buffer)>=50 and combinecounter>=25:
-            start_time = time.time()
+            start_time = time.perf_counter()
             data_tensor = preprocess_data(buffer, scaler)
 
             with torch.no_grad():
@@ -480,9 +480,9 @@ def get_prediction(model):
                 probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                 prediction = int(torch.argmax(output, dim=1).item())
 
-            end_time = time.time()
-            DeltaT = time.time() - prev_time
-            
+            end_time = time.perf_counter()
+            DeltaT = end_time - prev_time
+
             latency = (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
@@ -491,7 +491,7 @@ def get_prediction(model):
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-            prev_time = time.time() 
+            prev_time = time.perf_counter() 
 
 
 # Main loop
