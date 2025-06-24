@@ -6,15 +6,13 @@ from mbientlab.metawear.cbindings import (
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, signal, sys, threading
+import subprocess, time, signal, sys, threading, sched
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
 from threading import Thread
-
-
 import joblib
 import numpy as np
 
@@ -469,10 +467,10 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    prev_time = time.perf_counter()
+    prev_time = time.perf_counter_ns()
     while True:
         if len(buffer)>=50 and combinecounter>=25:
-            start_time = time.perf_counter()
+            start_time = time.perf_counter_ns()
             data_tensor = preprocess_data(buffer, scaler)
 
             with torch.no_grad():
@@ -480,15 +478,19 @@ def get_prediction(model):
                 probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                 prediction = int(torch.argmax(output, dim=1).item())
 
-            end_time = time.perf_counter()
+            end_time = time.perf_counter_ns()
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
+
+            wait    = (end_time - prev_time) - (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+            print(f"[time between] wait: {wait:.4f}s")
 
             prev_time = end_time 
 
@@ -525,22 +527,18 @@ if __name__ == '__main__':
     try:
         print("tried")
         target_dt = 1.0 / 50
-        
-        # p1 = Process(target=get_prediction, args=(model,))
-
-        # p1.start()
 
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
         while True:
-            loop_start = time.perf_counter()
+            loop_start = time.perf_counter_ns()
             
             CombineData()
             combinecounter+=1
             if combinecounter>25:
                 combinecounter= 1
-            elapsed = time.perf_counter() - loop_start
+            elapsed = time.perf_counter_ns() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
                 time.sleep(remaining)
