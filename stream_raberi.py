@@ -469,15 +469,8 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    prev_finish = time.perf_counter()
-    infer_interval = 0.5
-    next_call     = prev_finish
+    prev_time = time.perf_counter()
     while True:
-        next_call += infer_interval
-        to_sleep = next_call - time.perf_counter()
-        if to_sleep > 0:
-            time.sleep(to_sleep)
-
         if len(buffer)>=50 and combinecounter>=25:
             start_time = time.perf_counter()
             data_tensor = preprocess_data(buffer, scaler)
@@ -488,7 +481,7 @@ def get_prediction(model):
                 prediction = int(torch.argmax(output, dim=1).item())
 
             end_time = time.perf_counter()
-            DeltaT = end_time - prev_finish
+            DeltaT = end_time - prev_time
 
             latency = (end_time - start_time)
 
@@ -498,7 +491,7 @@ def get_prediction(model):
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-            prev_finish = end_time 
+            prev_time = end_time 
 
 
 # Main loop
