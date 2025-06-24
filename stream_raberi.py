@@ -482,7 +482,6 @@ def get_prediction(model):
 
             end_time = time.perf_counter()
             DeltaT = end_time - prev_time
-
             latency = (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
@@ -540,7 +539,7 @@ if __name__ == '__main__':
             CombineData()
             combinecounter+=1
             if combinecounter>25:
-                combinecounter= combinecounter-25
+                combinecounter= 1
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
