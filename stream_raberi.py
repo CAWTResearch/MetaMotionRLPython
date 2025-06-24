@@ -6,13 +6,15 @@ from mbientlab.metawear.cbindings import (
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, signal, sys, threading, sched
+import subprocess, time, signal, sys, threading
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
 from threading import Thread
+
+
 import joblib
 import numpy as np
 
@@ -467,10 +469,10 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    prev_time = time.perf_counter_ns()
+    prev_time = time.perf_counter()
     while True:
         if len(buffer)>=50 and combinecounter>=25:
-            start_time = time.perf_counter_ns()
+            start_time = time.perf_counter()
             data_tensor = preprocess_data(buffer, scaler)
 
             with torch.no_grad():
@@ -478,11 +480,11 @@ def get_prediction(model):
                 probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                 prediction = int(torch.argmax(output, dim=1).item())
 
-            end_time = time.perf_counter_ns()
-            DeltaT = (end_time - prev_time)/1000000000
-            latency = (end_time - start_time)/1000000000
+            end_time = time.perf_counter()
+            DeltaT = end_time - prev_time
+            latency = (end_time - start_time)
 
-            wait    = ((end_time - prev_time) - (end_time - start_time))/1000000000
+            wait    = (end_time - prev_time) - (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
@@ -532,13 +534,13 @@ if __name__ == '__main__':
         t1.start()
 
         while True:
-            loop_start = time.perf_counter_ns()
+            loop_start = time.perf_counter()
             
             CombineData()
             combinecounter+=1
             if combinecounter>25:
                 combinecounter= 1
-            elapsed = time.perf_counter_ns() - loop_start
+            elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
                 time.sleep(remaining)
