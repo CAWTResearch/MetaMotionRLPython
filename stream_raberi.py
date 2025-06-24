@@ -501,23 +501,23 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
-    def scratch():
-        getters = []
-        for _, st in QuaternionSensors:
-            getters += [
-                st.get_quat_W,
-                st.get_quat_X,
-                st.get_quat_Y,
-                st.get_quat_Z,
-            ]
-        for _, st in NormalSensors:
-            getters += [
-                st.get_acc_X, st.get_acc_Y, st.get_acc_Z,
-                st.get_gyro_X, st.get_gyro_Y, st.get_gyro_Z,
-            ]
+    
+    getters = []
+    for _, st in QuaternionSensors:
+        getters += [
+            st.get_quat_W,
+            st.get_quat_X,
+            st.get_quat_Y,
+            st.get_quat_Z,
+        ]
+    for _, st in NormalSensors:
+        getters += [
+            st.get_acc_X, st.get_acc_Y, st.get_acc_Z,
+            st.get_gyro_X, st.get_gyro_Y, st.get_gyro_Z,
+        ]
 
-        # Allocate one scratch buffer to reuse on every tick:
-        _data_scratch = [0.0] * len(getters)
+    # Allocate one scratch buffer to reuse on every tick:
+    _data_scratch = [0.0] * len(getters)
 
     print("All sensors configured & subscribed")
 
