@@ -469,7 +469,7 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    prev_time = 0
+    prev_time = time.perf_counter()
     while True:
         if len(buffer)>=50 and combinecounter>=25:
             start_time = time.perf_counter()
@@ -491,7 +491,7 @@ def get_prediction(model):
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-            prev_time = time.perf_counter() 
+            prev_time = end_time 
 
 
 # Main loop
