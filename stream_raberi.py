@@ -543,7 +543,7 @@ if __name__ == '__main__':
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
-                time.sleep(remaining - 0.8)
+                time.sleep(remaining - 0.08)
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
