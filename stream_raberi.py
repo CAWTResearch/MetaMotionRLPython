@@ -470,31 +470,28 @@ def CombineData():
 
 def get_prediction(model):
     prev_time = 0
-    next_call = time.time()
-    infer_interval = 0.5
     while True:
-        now = time.time()
         if len(buffer)>=50 and combinecounter>=25:
-            next_call =time.time() + infer_interval
-            if len(buffer) == buffer.maxlen:
-                start_time = time.time()
-                data_tensor = preprocess_data(buffer, scaler)
+            start_time = time.time()
+            data_tensor = preprocess_data(buffer, scaler)
 
-                with torch.no_grad():
-                    output = model(data_tensor)
-                    probabilities = torch.softmax(output, dim=1).squeeze().tolist()
-                    prediction = int(torch.argmax(output, dim=1).item())
+            with torch.no_grad():
+                output = model(data_tensor)
+                probabilities = torch.softmax(output, dim=1).squeeze().tolist()
+                prediction = int(torch.argmax(output, dim=1).item())
 
-                print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
-                end_time = time.time()
-                latency = (end_time - start_time)
+            end_time = time.time()
+            DeltaT = time.time() - prev_time
+            
+            latency = (end_time - start_time)
 
-                print(f"[inference] Latency: {latency:.4f}s")
+            print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
-                DeltaT = time.time() - prev_time
-                print(f"[inference] DeltaT: {DeltaT:.4f}s")
+            print(f"[inference] Latency: {latency:.4f}s")
 
-                prev_time = time.time() 
+            print(f"[inference] DeltaT: {DeltaT:.4f}s")
+
+            prev_time = time.time() 
 
 
 # Main loop
@@ -543,7 +540,7 @@ if __name__ == '__main__':
             CombineData()
             combinecounter+=1
             if combinecounter>25:
-                combinecounter=1
+                combinecounter= combinecounter-25
             elapsed = time.perf_counter() - loop_start
             remaining = target_dt - elapsed
             if remaining > 0:
