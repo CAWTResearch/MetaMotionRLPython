@@ -32,6 +32,8 @@ dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '0
 # dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA'] ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
 
 states = []
+getters = []
+_data_scratch = []
 
 
 input_dim=30 
@@ -455,17 +457,13 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-    Data = [QuaternionSensors[0][1].get_quat_W(), QuaternionSensors[0][1].get_quat_X(), QuaternionSensors[0][1].get_quat_Y(), QuaternionSensors[0][1].get_quat_Z(),
-            QuaternionSensors[1][1].get_quat_W(), QuaternionSensors[1][1].get_quat_X(), QuaternionSensors[1][1].get_quat_Y(), QuaternionSensors[1][1].get_quat_Z(),
-            QuaternionSensors[2][1].get_quat_W(), QuaternionSensors[2][1].get_quat_X(), QuaternionSensors[2][1].get_quat_Y(), QuaternionSensors[2][1].get_quat_Z(),
-            NormalSensors[0][1].get_acc_X(), NormalSensors[0][1].get_acc_Y(), NormalSensors[0][1].get_acc_Z(),
-            NormalSensors[0][1].get_gyro_X(), NormalSensors[0][1].get_gyro_Y(), NormalSensors[0][1].get_gyro_Z(),
-            NormalSensors[1][1].get_acc_X(), NormalSensors[1][1].get_acc_Y(), NormalSensors[1][1].get_acc_Z(),
-            NormalSensors[1][1].get_gyro_X(), NormalSensors[1][1].get_gyro_Y(), NormalSensors[1][1].get_gyro_Z(),
-            NormalSensors[2][1].get_acc_X(), NormalSensors[2][1].get_acc_Y(), NormalSensors[2][1].get_acc_Z(),
-            NormalSensors[2][1].get_gyro_X(), NormalSensors[2][1].get_gyro_Y(), NormalSensors[2][1].get_gyro_Z()]
-    
-    buffer.append(Data)
+    loc_getters = getters
+    loc_scratch = _data_scratch
+
+    for i, fn in enumerate(loc_getters):
+        loc_scratch[i] = fn()
+
+    buffer.append(loc_scratch.copy())
     return 
 
 def get_prediction(model):
@@ -503,6 +501,24 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
+    def scratch():
+        getters = []
+        for _, st in QuaternionSensors:
+            getters += [
+                st.get_quat_W,
+                st.get_quat_X,
+                st.get_quat_Y,
+                st.get_quat_Z,
+            ]
+        for _, st in NormalSensors:
+            getters += [
+                st.get_acc_X, st.get_acc_Y, st.get_acc_Z,
+                st.get_gyro_X, st.get_gyro_Y, st.get_gyro_Z,
+            ]
+
+        # Allocate one scratch buffer to reuse on every tick:
+        _data_scratch = [0.0] * len(getters)
+
     print("All sensors configured & subscribed")
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
