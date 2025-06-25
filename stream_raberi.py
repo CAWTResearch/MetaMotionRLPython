@@ -6,34 +6,29 @@ from mbientlab.metawear.cbindings import (
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, signal, sys, threading
+import subprocess, time, signal, sys, threading, datetime
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
-from threading import Thread
+from threading import Thread, Event
 
 
 import joblib
 import numpy as np
 
-
-buffer = deque(maxlen=50)
-combinecounter = 0
-
 # Sensor y dongle MACs
-
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
-
-# dongle_macs = ['00:E0:5C:48:02:38','00:E0:5C:48:01:63', '00:E0:5C:48:03:93', '00:E0:5C:48:01:34', '00:E0:5C:48:05:B5', '3C:0A:F3:10:17:F0']
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
-# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA'] ['00:E0:5C:48:01:70', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:01:63']
+# dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', '3C:0A:F3:10:17:F0', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
 
 states = []
 
-
+buffer = deque(maxlen=50)
+combinecounter = 0
+predicted_event = Event()
 input_dim=30 
 cnn_out_channels=512 
 lstm_hidden=512 
@@ -41,11 +36,6 @@ lstm_layers=2
 output_dim=6
 QuaternionSensors = []
 NormalSensors = []
-
-# cnn_out_channels = 128
-# lstm_hidden = 256
-# lstm_layers = 1
-
 
 profiles = [
     {"interval":8.75, "latency":5, "timeout":10000},
@@ -55,9 +45,6 @@ profiles = [
     {"interval":40.0, "latency":2, "timeout":10000},
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
-
-
-
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -251,7 +238,6 @@ def configureNormal(states, N_Quantaty):
 
     Sensor_Names = ["n_chest", "n_left_knee", "n_right_hand"]
 
-
     i = 0
     for st in states[0:N_Quantaty]:
         print(str(len(states[0:N_Quantaty])))
@@ -371,8 +357,6 @@ def disconnect_sensors():
         # Give the board a moment to process each step
         time.sleep(1.0)
 
-
-
 def reconfigure_and_subscribe(st, retries=5, backoff=1.0):
     # BlueZ will call this on disconnect; immediately spin off a thread
     threading.Thread(target=_do_reconnect, args=(st, retries, backoff), daemon=True).start()
@@ -469,10 +453,10 @@ def CombineData():
     return 
 
 def get_prediction(model):
-    prev_time = time.perf_counter()
+    prev_time = time.time()
     while True:
         if len(buffer)>=50 and combinecounter>=25:
-            start_time = time.perf_counter()
+            start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
 
             with torch.no_grad():
@@ -480,22 +464,24 @@ def get_prediction(model):
                 probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                 prediction = int(torch.argmax(output, dim=1).item())
 
-            end_time = time.perf_counter()
+            end_time = time.time()
+            # print(datetime.datetime.now().strftime('%H:%M:%S.%f'))
             DeltaT = end_time - prev_time
-            latency = (end_time - start_time)
+            # latency = (end_time - start_time)
 
-            wait    = (end_time - prev_time) - (end_time - start_time)
+            # wait    = (end_time - prev_time) - (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
-            print(f"[inference] Latency: {latency:.4f}s")
+            # print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
 
-            print(f"[time between] wait: {wait:.4f}s")
-
+            # print(f"[time between] wait: {wait:.4f}s")
+            
             prev_time = end_time 
-
+            predicted_event.set()
+            time.sleep(0.02)
 
 # Main loop
 if __name__ == '__main__':
@@ -533,17 +519,27 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
+        next_time = time.perf_counter()
         while True:
+            jitter_margin = 0.002
+            screen_limit = 25
             loop_start = time.perf_counter()
+            deadline = next_time
+            sleep =  deadline - loop_start -jitter_margin
+
+            if sleep > 0:
+                time.sleep(sleep)
+            
+            while time.perf_counter() < deadline:
+                pass
             
             CombineData()
             combinecounter+=1
-            if combinecounter>25:
-                combinecounter= 1
-            elapsed = time.perf_counter() - loop_start
-            remaining = target_dt - elapsed
-            if remaining > 0:
-                time.sleep(remaining - 0.08)
+            print(combinecounter)
+            if combinecounter> screen_limit and predicted_event.is_set():
+                combinecounter -= screen_limit
+                predicted_event.clear()
+            next_time+=(1/50)
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
