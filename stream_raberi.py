@@ -478,7 +478,6 @@ def get_prediction(model):
             
             prev_time = end_time 
             predicted_event.set()
-            time.sleep(0.02)
 
 # Main loop
 if __name__ == '__main__':
