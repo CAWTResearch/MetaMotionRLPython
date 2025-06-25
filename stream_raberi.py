@@ -468,6 +468,7 @@ def get_prediction(model):
                 prediction = int(torch.argmax(output, dim=1).item())
 
             end_time = time.time()
+            predicted_event.set()
             # print(datetime.datetime.now().strftime('%H:%M:%S.%f'))
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
