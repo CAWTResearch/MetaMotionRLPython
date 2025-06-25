@@ -499,7 +499,6 @@ if __name__ == '__main__':
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
     model = torch.jit.script(model)
-    model = torch.jit.freeze(model)
     print("modeled")
 
     # Scaler
