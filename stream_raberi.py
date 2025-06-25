@@ -458,6 +458,7 @@ def get_prediction(model):
     prev_time = time.time()
     while True:
         if len(buffer)>=50 and combinecounter>=25:
+            print(combinecounter)
             start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
 
@@ -467,17 +468,23 @@ def get_prediction(model):
                 prediction = int(torch.argmax(output, dim=1).item())
 
             end_time = time.time()
+            # print(datetime.datetime.now().strftime('%H:%M:%S.%f'))
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
+
+            # wait    = (end_time - prev_time) - (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
-            print(combinecounter)
+
+            # print(f"[time between] wait: {wait:.4f}s")
             
             prev_time = end_time 
+            predicted_event.set()
+
 
 # Main loop
 if __name__ == '__main__':
@@ -531,7 +538,8 @@ if __name__ == '__main__':
             
             CombineData()
             combinecounter+=1
-            if combinecounter> screen_limit :
+            print(combinecounter)
+            if combinecounter> screen_limit and predicted_event:
                 combinecounter -= screen_limit
                 predicted_event.clear()
             next_time+=(1/50)
