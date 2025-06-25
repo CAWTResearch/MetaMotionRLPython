@@ -539,7 +539,7 @@ if __name__ == '__main__':
             combinecounter+=1
             print(combinecounter)
             if combinecounter> screen_limit and predicted_event.is_set():
-                combinecounter -= screen_limit
+                combinecounter = 1
                 predicted_event.clear()
             next_time+=(1/50)
         
