@@ -487,7 +487,6 @@ def get_prediction(model):
             # print(f"[time between] wait: {wait:.4f}s")
             
             prev_time = end_time 
-            predicted_event.set()
 
 
 # Main loop
@@ -544,6 +543,7 @@ if __name__ == '__main__':
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
+                print("cleared")
             next_time+=(1/50)
         
     except KeyboardInterrupt:
