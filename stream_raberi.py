@@ -538,8 +538,7 @@ if __name__ == '__main__':
             
             CombineData()
             combinecounter+=1
-            print(combinecounter)
-            if combinecounter> screen_limit and predicted_event:
+            if combinecounter> screen_limit and predicted_event and len(buffer)>=50:
                 combinecounter -= screen_limit
                 predicted_event.clear()
             next_time+=(1/50)
