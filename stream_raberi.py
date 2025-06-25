@@ -24,10 +24,6 @@ device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E
 # dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:34', '00:E0:5C:48:02:BA']
 dongle_macs = ['00:E0:5C:48:01:70', '00:E0:5C:48:06:BD', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:05:B5', '00:E0:5C:48:02:BA']
 
-
-torch.set_num_threads(2)
-torch.set_num_interop_threads(2)
-
 states = []
 
 buffer = deque(maxlen=50)
@@ -498,7 +494,6 @@ if __name__ == '__main__':
     print("All sensors configured & subscribed")
 
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels, lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
-    model = torch.jit.script(model)
     print("modeled")
 
     # Scaler
