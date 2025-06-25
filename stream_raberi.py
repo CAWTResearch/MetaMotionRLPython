@@ -35,7 +35,7 @@ input_dim=30
 # lstm_layers=2 
 output_dim=6
 
-cnn_out_channels = 128
+cnn_out_channels = 256
 lstm_hidden = 256
 lstm_layers = 1
 
