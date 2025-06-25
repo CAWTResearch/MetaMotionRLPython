@@ -30,8 +30,8 @@ buffer = deque(maxlen=50)
 combinecounter = 0
 predicted_event = Event()
 input_dim=30 
-cnn_out_channels=512 
-lstm_hidden=512 
+cnn_out_channels=256
+lstm_hidden=256
 lstm_layers=2 
 output_dim=6
 
@@ -460,7 +460,7 @@ def CombineData():
 def get_prediction(model):
     prev_time = time.time()
     while True:
-        if len(buffer)>=50 and combinecounter>=25:
+        if (len(buffer)>=50 and combinecounter>=25):
             print(combinecounter)
             start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
@@ -472,20 +472,15 @@ def get_prediction(model):
 
             end_time = time.time()
             predicted_event.set()
-            # print(datetime.datetime.now().strftime('%H:%M:%S.%f'))
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
 
-            # wait    = (end_time - prev_time) - (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
-
-            # print(f"[time between] wait: {wait:.4f}s")
-            
             prev_time = end_time 
 
 
@@ -504,7 +499,7 @@ if __name__ == '__main__':
     scaler = joblib.load("scaler_model_full_model.pkl")
     print("Scaled")
 
-    model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
     model.eval()
     print("Modeled again")
     
