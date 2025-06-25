@@ -461,10 +461,10 @@ def get_prediction(model):
     prev_time = time.time()
     while True:
         if (len(buffer)>=50 and combinecounter>=25):
+            predicted_event.set()
             print(combinecounter)
             start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
-            predicted_event.set()
 
             with torch.no_grad():
                 output = model(data_tensor)
