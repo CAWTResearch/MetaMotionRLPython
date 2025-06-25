@@ -464,6 +464,7 @@ def get_prediction(model):
             print(combinecounter)
             start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
+            predicted_event.set()
 
             with torch.no_grad():
                 output = model(data_tensor)
@@ -471,7 +472,6 @@ def get_prediction(model):
                 prediction = int(torch.argmax(output, dim=1).item())
 
             end_time = time.time()
-            predicted_event.set()
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
 
@@ -528,9 +528,6 @@ if __name__ == '__main__':
 
             if sleep > 0:
                 time.sleep(sleep)
-            
-            # while time.perf_counter() < deadline:
-            #     pass
             
             CombineData()
             combinecounter+=1
