@@ -530,8 +530,8 @@ if __name__ == '__main__':
             if sleep > 0:
                 time.sleep(sleep)
             
-            while time.perf_counter() < deadline:
-                pass
+            # while time.perf_counter() < deadline:
+            #     pass
             
             CombineData()
             combinecounter+=1
