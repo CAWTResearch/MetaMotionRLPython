@@ -527,7 +527,7 @@ if __name__ == '__main__':
 
         next_time = time.perf_counter()
         while True:
-            jitter_margin = 0.004
+            jitter_margin = 0.000
             screen_limit = 25
             loop_start = time.perf_counter()
             deadline = next_time
