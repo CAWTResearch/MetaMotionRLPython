@@ -477,7 +477,6 @@ def get_prediction(model):
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             
             prev_time = end_time 
-            predicted_event.set()
 
 # Main loop
 if __name__ == '__main__':
