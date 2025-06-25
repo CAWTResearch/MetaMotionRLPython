@@ -30,14 +30,14 @@ buffer = deque(maxlen=50)
 combinecounter = 0
 predicted_event = Event()
 input_dim=30 
-# cnn_out_channels=512 
-# lstm_hidden=512 
-# lstm_layers=2 
+cnn_out_channels=512 
+lstm_hidden=512 
+lstm_layers=2 
 output_dim=6
 
-cnn_out_channels = 256
-lstm_hidden = 256
-lstm_layers = 1
+# cnn_out_channels = 256
+# lstm_hidden = 256
+# lstm_layers = 1
 
 QuaternionSensors = []
 NormalSensors = []
