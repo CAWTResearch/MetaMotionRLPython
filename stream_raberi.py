@@ -475,6 +475,7 @@ def get_prediction(model):
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
+            print(combinecounter)
             
             prev_time = end_time 
 
@@ -530,7 +531,6 @@ if __name__ == '__main__':
             
             CombineData()
             combinecounter+=1
-            print(combinecounter)
             if combinecounter> screen_limit :
                 combinecounter -= screen_limit
                 predicted_event.clear()
