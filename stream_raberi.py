@@ -516,8 +516,10 @@ if __name__ == '__main__':
         t1.start()
 
         next_time = time.perf_counter()
+        max_interval = 0.51
+        screen_limit = 25
+        current_interval = time.monotonic()
         while True:
-            screen_limit = 25
             loop_start = time.perf_counter()
             deadline = next_time
             sleep =  deadline - loop_start 
@@ -527,10 +529,15 @@ if __name__ == '__main__':
             
             CombineData()
             combinecounter+=1
+            elapsed = time.monotonic() - current_interval
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-            next_time+=(1/50)
+                current_interval = time.monotonic()
+            if combinecounter < screen_limit and current_interval > max_interval:
+                combinecounter = screen_limit
+                current_interval = time.monotonic
+            next_time+=(1/50) 
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
