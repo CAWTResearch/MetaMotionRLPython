@@ -540,6 +540,7 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
+        start_ts = time.time()
         next_time = time.perf_counter()
         max_interval = 0.505
         screen_limit = 25
@@ -563,6 +564,8 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 current_interval = time.monotonic()
+            elapsedtime= time.time()-start_ts
+            print(f"{elapsedtime}")
             next_time+=(1/50) 
         
     except KeyboardInterrupt:
