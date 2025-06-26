@@ -563,7 +563,7 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 interval_start = time.monotonic()
-            next_time+= TARGET 
+            next_ts+= TARGET 
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
