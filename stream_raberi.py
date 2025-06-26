@@ -564,8 +564,8 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 current_interval = time.monotonic()
-            elapsedtime= time.time()-start_ts
-            print(f"{elapsedtime}")
+                elapsedtime= time.time()-start_ts
+                print(f"{elapsedtime}")
             next_time+=(1/50) 
         
     except KeyboardInterrupt:
