@@ -556,7 +556,7 @@ if __name__ == '__main__':
         t1.start()
 
         start_ts = time.time()
-        TARGET     = 0.5
+        TARGET     = 1/50
         next_ts    = time.perf_counter()
         screen_limit = 25
         while True:
