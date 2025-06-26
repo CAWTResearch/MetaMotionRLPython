@@ -536,7 +536,7 @@ if __name__ == '__main__':
                 current_interval = time.monotonic()
             if combinecounter < screen_limit and current_interval > max_interval:
                 combinecounter = screen_limit
-                current_interval = time.monotonic
+                current_interval = time.monotonic()
             next_time+=(1/50) 
         
     except KeyboardInterrupt:
