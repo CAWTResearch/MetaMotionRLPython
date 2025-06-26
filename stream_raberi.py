@@ -534,7 +534,7 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 current_interval = time.monotonic()
-            if combinecounter < screen_limit and current_interval > max_interval:
+            if combinecounter < screen_limit and elapsed > max_interval:
                 combinecounter = screen_limit
             next_time+=(1/50) 
         
