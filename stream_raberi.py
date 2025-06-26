@@ -516,7 +516,7 @@ if __name__ == '__main__':
         t1.start()
 
         next_time = time.perf_counter()
-        max_interval = 0.51
+        max_interval = 0.505
         screen_limit = 25
         current_interval = time.monotonic()
         while True:
@@ -533,7 +533,6 @@ if __name__ == '__main__':
 
             if combinecounter < screen_limit and elapsed > max_interval:
                 combinecounter = screen_limit
-                current_interval = time.monotonic()
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
