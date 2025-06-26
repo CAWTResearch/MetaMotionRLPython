@@ -479,55 +479,45 @@ def get_prediction(model):
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             prev_time = end_time 
 
-# 1) Define timespec
+# ─── 1) Load libc & define constants ────────────────────────────────────────
+libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+CLOCK_MONOTONIC = 1      # from <time.h>
+TIMER_ABSTIME   = 1
 
+# ─── 2) Define the timespec struct ─────────────────────────────────────────
 class timespec(ctypes.Structure):
-
     _fields_ = [
-
-        ("tv_sec",  ctypes.c_long),
-
-        ("tv_nsec", ctypes.c_long),
-
+        ("tv_sec",  ctypes.c_long),   # seconds
+        ("tv_nsec", ctypes.c_long),   # nanoseconds
     ]
 
+# ─── 3) Bind the clock_nanosleep syscall ─────────────────────────────────
+_clock_nanosleep = libc.clock_nanosleep
+_clock_nanosleep.argtypes = (
+    ctypes.c_int,              # clockid_t
+    ctypes.c_int,              # flags
+    ctypes.POINTER(timespec),  # const struct timespec *req
+    ctypes.c_void_p            # struct timespec *rem (or NULL)
+)
+_clock_nanosleep.restype = ctypes.c_int
 
-
-# 2) Load libc and the nanosleep symbol
-
-libc      = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-
-nanosleep = libc.nanosleep
-
-
-
-# 3) Tell ctypes the correct signatures:
-
-#    first arg: POINTER(timespec), second arg: POINTER(timespec)
-
-nanosleep.argtypes = (ctypes.POINTER(timespec), ctypes.POINTER(timespec))
-
-nanosleep.restype  = ctypes.c_int
-
-
-
-# 4) Wrapper that uses a dummy 'rem' if you don't care about leftover
-
-def sleep_nanosleep(seconds: float):
-
-    sec  = int(seconds)
-
-    nsec = int((seconds - sec) * 1e9)
-
+# ─── 4) Absolute‐time sleep helper ─────────────────────────────────────────
+def sleep_until(target_ts: float):
+    """
+    Blocks until the monotonic clock reaches `target_ts` (in seconds).
+    Raises OSError on failure.
+    """
+    # Build a timespec for the absolute target
+    sec  = int(target_ts)
+    nsec = int((target_ts - sec) * 1e9)
     req  = timespec(sec, nsec)
 
-    rem  = timespec()             # we won't examine rem afterward
-
-    if nanosleep(ctypes.byref(req), ctypes.byref(rem)) != 0:
-
-        err = ctypes.get_errno()
-
-        raise OSError(err, "nanosleep failed")
+    # Call clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &req, NULL)
+    err = _clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME,
+                           ctypes.byref(req), None)
+    if err != 0:
+        errno = ctypes.get_errno()
+        raise OSError(errno, os.strerror(errno))
 
 # Main loop
 if __name__ == '__main__':
@@ -565,32 +555,21 @@ if __name__ == '__main__':
         t1.start()
 
         start_ts = time.time()
-        next_time = time.perf_counter()
-        max_interval = 0.505
+        TARGET     = 0.5
+        next_ts    = time.monotonic()
         screen_limit = 25
-        current_interval = time.monotonic()
         while True:
-            loop_start = time.perf_counter()
-            deadline = next_time
-            sleep =  deadline - loop_start 
-
-            if sleep > 0:
-               sleep_nanosleep(sleep)
+            next_ts += TARGET
+            sleep_until(next_ts)
             
             CombineData()
             combinecounter+=1
-            elapsed = time.monotonic() - current_interval
-
-            if combinecounter < screen_limit and elapsed > max_interval:
-                combinecounter = screen_limit
-
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-                current_interval = time.monotonic()
+
                 elapsedtime= time.time()-start_ts
                 print(f"{elapsedtime}")
-            next_time+=(1/50) 
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
