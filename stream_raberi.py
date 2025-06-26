@@ -479,31 +479,31 @@ def get_prediction(model):
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             prev_time = end_time 
 
-libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-CLOCK_MONOTONIC = 1     # see <time.h>
-TIMER_ABSTIME   = 1
-
-# timespec struct for the syscall
+# 1) Define timespec
 class timespec(ctypes.Structure):
-    _fields_ = [("tv_sec",  ctypes.c_long),
-                ("tv_nsec", ctypes.c_long)]
+    _fields_ = [
+        ("tv_sec",  ctypes.c_long),
+        ("tv_nsec", ctypes.c_long),
+    ]
 
-# Prototype: int clock_nanosleep(clockid_t, int, const struct timespec *, struct timespec *);
-_cns = libc.clock_nanosleep
-_cns.argtypes = (ctypes.c_int, ctypes.c_int,
-                 ctypes.POINTER(timespec),
-                 ctypes.POINTER(timespec))
-_cns.restype  = ctypes.c_int
+# 2) Load libc and the nanosleep symbol
+libc      = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+nanosleep = libc.nanosleep
 
-def sleep_until(target_ts: float):
-    """
-    Sleeps until an absolute monotonic timestamp `target_ts` (seconds).
-    """
-    ns = int(target_ts * 1e9)
-    req = timespec(ns // 1_000_000_000, ns % 1_000_000_000)
-    err = _cns(CLOCK_MONOTONIC, TIMER_ABSTIME, ctypes.byref(req), None)
-    if err != 0:
-        raise OSError(err, "clock_nanosleep failed")
+# 3) Tell ctypes the correct signatures:
+#    first arg: POINTER(timespec), second arg: POINTER(timespec)
+nanosleep.argtypes = (ctypes.POINTER(timespec), ctypes.POINTER(timespec))
+nanosleep.restype  = ctypes.c_int
+
+# 4) Wrapper that uses a dummy 'rem' if you don't care about leftover
+def sleep_nanosleep(seconds: float):
+    sec  = int(seconds)
+    nsec = int((seconds - sec) * 1e9)
+    req  = timespec(sec, nsec)
+    rem  = timespec()             # we won't examine rem afterward
+    if nanosleep(ctypes.byref(req), ctypes.byref(rem)) != 0:
+        err = ctypes.get_errno()
+        raise OSError(err, "nanosleep failed")
 
 # Main loop
 if __name__ == '__main__':
@@ -540,30 +540,30 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
-        TARGET       = 0.5               # seconds between predictions
+        next_time = time.perf_counter()
+        max_interval = 0.505
         screen_limit = 25
-        max_interval = 0.51
-
-        # Initialize both clocks
-        next_ts        = time.monotonic()      # absolute target for next wake
-        interval_start = next_ts               # window‐start timestamp
-        combinecounter = 0
+        current_interval = time.monotonic()
         while True:
-            sleep_until(next_ts)
+            loop_start = time.perf_counter()
+            deadline = next_time
+            sleep =  deadline - loop_start 
+
+            if sleep > 0:
+                sleep_nanosleep(sleep)
             
             CombineData()
             combinecounter+=1
-            elapsed = time.monotonic() - interval_start
+            elapsed = time.monotonic() - current_interval
 
             if combinecounter < screen_limit and elapsed > max_interval:
                 combinecounter = screen_limit
-                interval_start = time.monotonic()
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-                interval_start = time.monotonic()
-            next_ts+= TARGET 
+                current_interval = time.monotonic()
+            next_time+=(1/50) 
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
