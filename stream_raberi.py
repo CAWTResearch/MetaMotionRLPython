@@ -557,7 +557,7 @@ if __name__ == '__main__':
 
         start_ts = time.time()
         TARGET     = 0.5
-        next_ts    = time.monotonic()
+        next_ts    = time.perf_counter()
         screen_limit = 25
         while True:
             next_ts += TARGET
