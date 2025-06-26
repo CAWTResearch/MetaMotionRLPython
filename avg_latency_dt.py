@@ -42,12 +42,15 @@ def main():
     # Count how often thresholds are exceeded
     count_lat_over = sum(1 for l in lat if l > 0.24)
     count_dt_over  = sum(1 for d in dt  if d > 0.519)
+    count_dt_under = sum(1 for d in dt if d <0.480)
 
     print(f"Parsed {len(lat)} latency entries, {len(dt)} ΔT entries")
     print(f"Average Latency: {avg_lat:.4f}s  (min: {min_lat:.4f}s, max: {max_lat:.4f}s)")
     print(f"Average ΔT:      {avg_dt:.4f}s  (min: {min_dt:.4f}s, max: {max_dt:.4f}s)")
     print(f"Latency > 0.24s: {count_lat_over} times")
     print(f"ΔT      > 0.519s: {count_dt_over} times")
+    print(f"ΔT      < 0.480s: {count_dt_under} times")
+    
 
 if __name__ == "__main__":
     main()
