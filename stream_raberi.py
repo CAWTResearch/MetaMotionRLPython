@@ -552,8 +552,6 @@ if __name__ == '__main__':
             if combinecounter> 25 and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-            next_time+=(1/50)
-        
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
         pass
