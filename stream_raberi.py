@@ -13,7 +13,7 @@ import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
 from threading import Thread, Event
-
+import ctypes, ctypes.util
 
 import joblib
 import numpy as np
@@ -35,12 +35,21 @@ lstm_hidden=256
 lstm_layers=2 
 output_dim=6
 
-# cnn_out_channels = 256
-# lstm_hidden = 256
-# lstm_layers = 1
-
 QuaternionSensors = []
 NormalSensors = []
+
+# Load libc
+libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+CLOCK_MONOTONIC = 1
+TIMER_ABSTIME   = 1
+
+# Prototype
+_cns = libc.clock_nanosleep
+_cns.argtypes = (ctypes.c_int, ctypes.c_int,
+                 ctypes.POINTER(ctypes.c_long * 2),
+                 ctypes.POINTER(ctypes.c_long * 2))
+_cns.restype  = ctypes.c_int
+
 
 profiles = [
     {"interval":8.75, "latency":5, "timeout":10000},
@@ -483,6 +492,13 @@ def get_prediction(model):
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             prev_time = end_time 
 
+def sleep_until(ts):
+    """Sleep until absolute monotonic timestamp ts (in seconds)."""
+    ns = int(ts * 1e9)
+    req = (ctypes.c_long * 2)(ns // 1_000_000_000, ns % 1_000_000_000)
+    err = _cns(CLOCK_MONOTONIC, TIMER_ABSTIME, ctypes.byref(req), None)
+    if err != 0:
+        raise OSError(ctypes.get_errno(), "clock_nanosleep failed")
 
 # Main loop
 if __name__ == '__main__':
@@ -519,19 +535,21 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
-        next_time = time.perf_counter()
-        while True:
-            screen_limit = 25
-            loop_start = time.perf_counter()
-            deadline = next_time
-            sleep =  deadline - loop_start 
+        TARGET   = 0.5
+        next_ts  = time.monotonic()
+        last_ts  = next_ts
 
-            if sleep > 0:
-                time.sleep(sleep)
-            
+        while True:
+            next_ts += TARGET
+            sleep_until(next_ts)
+
+            now = time.monotonic()
+            dt  = now - last_ts
+            last_ts = now
+                    
             CombineData()
             combinecounter+=1
-            if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
+            if combinecounter> 25 and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
             next_time+=(1/50)
