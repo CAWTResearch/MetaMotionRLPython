@@ -478,6 +478,7 @@ def get_prediction(model):
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             prev_time = end_time 
+            time.sleep(0.04)
 
 # ─── 1) Load libc & define constants ────────────────────────────────────────
 libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
