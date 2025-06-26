@@ -479,31 +479,6 @@ def get_prediction(model):
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
             prev_time = end_time 
 
-# 1) Define timespec
-class timespec(ctypes.Structure):
-    _fields_ = [
-        ("tv_sec",  ctypes.c_long),
-        ("tv_nsec", ctypes.c_long),
-    ]
-
-# 2) Load libc and the nanosleep symbol
-libc      = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
-nanosleep = libc.nanosleep
-
-# 3) Tell ctypes the correct signatures:
-#    first arg: POINTER(timespec), second arg: POINTER(timespec)
-nanosleep.argtypes = (ctypes.POINTER(timespec), ctypes.POINTER(timespec))
-nanosleep.restype  = ctypes.c_int
-
-# 4) Wrapper that uses a dummy 'rem' if you don't care about leftover
-def sleep_nanosleep(seconds: float):
-    sec  = int(seconds)
-    nsec = int((seconds - sec) * 1e9)
-    req  = timespec(sec, nsec)
-    rem  = timespec()             # we won't examine rem afterward
-    if nanosleep(ctypes.byref(req), ctypes.byref(rem)) != 0:
-        err = ctypes.get_errno()
-        raise OSError(err, "nanosleep failed")
 
 # Main loop
 if __name__ == '__main__':
@@ -551,7 +526,7 @@ if __name__ == '__main__':
             sleep =  deadline - loop_start 
 
             if sleep > 0:
-                sleep_nanosleep(sleep)
+                time.sleep(sleep)
             
             CombineData()
             combinecounter+=1
