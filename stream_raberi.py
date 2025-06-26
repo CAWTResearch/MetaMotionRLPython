@@ -530,12 +530,15 @@ if __name__ == '__main__':
             CombineData()
             combinecounter+=1
             elapsed = time.monotonic() - current_interval
+
+            if combinecounter < screen_limit and elapsed > max_interval:
+                combinecounter = screen_limit
+                current_interval = time.monotonic()
+
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
                 current_interval = time.monotonic()
-            if combinecounter < screen_limit and elapsed > max_interval:
-                combinecounter = screen_limit
             next_time+=(1/50) 
         
     except KeyboardInterrupt:
