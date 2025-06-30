@@ -6,35 +6,30 @@ import sys
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
-PARENT_FOLDER_ID = '16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l'
+PARENT_FOLDER_ID = "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
 
-# Directory to scan for CSVs: the folder containing this script
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-print(f"Scanning directory: {BASE_DIR}")
-print("Contents:", os.listdir(BASE_DIR))
+# 1) Compute the absolute path one level up (MetaMotionRLPython)
+parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-# Ensure AccurateStreaming module is importable if needed
-parent_dir = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
+# 2) Insert it at the front of sys.path so Python can find AccurateStreaming.py
+if parent not in sys.path:
+    sys.path.insert(0, parent)
 
+# 3) Now do a normal (absolute) import
 from AccurateStreaming import device_macs, dongle_macs
 
 def authenticate():
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return creds
 
-
 def create_subfolder(service, name, parent_id):
-    metadata = {
+    file_metadata = {
         'name': name,
         'mimeType': 'application/vnd.google-apps.folder',
         'parents': [parent_id]
     }
-    folder = service.files().create(body=metadata, fields='id').execute()
+    folder = service.files().create(body=file_metadata, fields='id').execute()
     return folder.get('id')
-
 
 def upload_file(service, file_path, folder_id):
     file_metadata = {
@@ -45,33 +40,32 @@ def upload_file(service, file_path, folder_id):
         body=file_metadata,
         media_body=file_path
     ).execute()
-
-
+    
 def print_devices():
     print("Sensors:", device_macs)
     print("Dongles:", dongle_macs)
-
 
 def upload_all_files():
     creds = authenticate()
     service = build('drive', 'v3', credentials=creds)
 
-    # create a timestamped subfolder
+    # Create a subfolder with a timestamp
     import datetime
-    subfolder = 'Upload_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-    subfolder_id = create_subfolder(service, subfolder, PARENT_FOLDER_ID)
+    subfolder_name = 'Upload_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
 
-    # upload specific files
-    for filename in ('combined_data.csv', 'predictions.csv'):
-        path = os.path.join(BASE_DIR, filename)
-        if os.path.isfile(path):
-            print(f"Uploading {filename}")
-            upload_file(service, path, subfolder_id)
+    # Define the specific files to upload
+    files_to_upload = ['combined_data.csv', 'predictions.csv']
+    for file_name in files_to_upload:
+        file_path = os.path.join(parent, file_name)
+        if os.path.exists(file_path):
+            upload_file(service, file_path, subfolder_id)
+            print(f"Uploaded {file_name}")
         else:
-            print(f"[SKIP] {filename} not found in {BASE_DIR}")
+            print(f"File not found: {file_path}")
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     print_devices()
     upload_all_files()
-    print('Operation complete.')
+    print("Files uploaded successfully.")
+    print("See Google Drive for the uploaded files.")
