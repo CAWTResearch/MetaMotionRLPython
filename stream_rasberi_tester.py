@@ -8,7 +8,7 @@ from mbientlab.metawear.cbindings import (
 )
 import subprocess, time, signal, sys, threading, datetime
 from collections import deque
-import torch
+import torch, math, csv
 import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
@@ -23,13 +23,21 @@ buffer = deque(maxlen=50)
 combinecounter = 0
 predicted_event = Event()
 input_dim=30 
-cnn_out_channels=512 
-lstm_hidden=512 
+cnn_out_channels=256
+lstm_hidden=256
 lstm_layers=2 
 output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
+os.makedirs('DriveUpload', exist_ok=True)
+pred_file = open(os.path.join('DriveUpload', 'predictions.csv'),   'w', newline='')
+pred_writer = csv.writer(pred_file)
+pred_writer.writerow([
+    'timestamp',
+    'prediction',
+    *[f'prob_{i}' for i in range(output_dim)]
+])
 
 
 def preprocess_data(buffer, scaler):
@@ -191,7 +199,7 @@ def CombineData():
     Data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     
     buffer.append(Data)
-    return 
+    return Data
 
 def get_prediction(model):
     prev_time = time.time()
@@ -217,8 +225,12 @@ def get_prediction(model):
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
+            timestamp = datetime.datetime.now().isoformat()
+            pred_writer.writerow([timestamp, prediction, *probabilities])
+            pred_file.flush()
+
             prev_time = end_time 
-            time.sleep(0.02)
+            time.sleep(0.04)
 
 # Main loop
 if __name__ == '__main__':
@@ -231,10 +243,21 @@ if __name__ == '__main__':
     scaler = joblib.load("scaler_model_full_model.pkl")
     print("Scaled")
 
-    model.load_state_dict(torch.load("cnn_lstm_fold1.pth", map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
     model.eval()
     print("Modeled again")
     
+    data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
+    data_writer = csv.writer(data_file)
+    # Build combined‐data headers from your sensor lists:
+    data_headers = []
+    for name,_ in QuaternionSensors:
+        data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
+    for name,_ in NormalSensors:
+        data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
+        data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
+    data_writer.writerow(data_headers)
+
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
@@ -250,22 +273,36 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
-        next_time = time.perf_counter()
+        start_ts = time.perf_counter()
+        next_time = start_ts + target_dt
+        screen_limit = 25
         while True:
-            screen_limit = 25
+            elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
-            deadline = next_time
-            sleep =  deadline - loop_start
+            sleep =  next_time - (loop_start)
 
             if sleep > 0:
                 time.sleep(sleep)
             
-            CombineData()
+            
+            data = CombineData()
+            data_writer.writerow(data)
             combinecounter+=1
+
+            elapsed   = time.perf_counter() - start_ts
+            remainder = elapsed % 0.5
+
+            # trigger if we’re within ±ε of the 0‐mark
+            if math.isclose(remainder, 0.0, abs_tol=0.02):
+                combinecounter = 25
+
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-            next_time+=(1/50)
+                print(f"{elapsedtime}")
+
+                
+            next_time+= target_dt
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run

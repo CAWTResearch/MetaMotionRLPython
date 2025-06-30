@@ -491,7 +491,6 @@ def get_prediction(model):
             pred_file.flush()
 
             prev_time = end_time 
-            time.sleep(0.04)
 
 
 # Main loop
@@ -548,8 +547,8 @@ if __name__ == '__main__':
             loop_start = time.perf_counter()
             sleep =  next_time - (loop_start)
 
-            if sleep > 0.002:
-                time.sleep(sleep - 0.001)
+            if sleep > 0.:
+                time.sleep(sleep)
             
             
             data = CombineData()
