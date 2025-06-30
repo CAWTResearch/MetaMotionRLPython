@@ -8,7 +8,7 @@ from mbientlab.metawear.cbindings import (
 )
 import subprocess, time, signal, sys, threading, datetime
 from collections import deque
-import torch, math, csv
+import torch, math, csv,random, string
 import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
@@ -232,6 +232,15 @@ def get_prediction(model):
             prev_time = end_time 
             time.sleep(0.04)
 
+
+def gen_random_names(count, length=6):
+    """Return a list of `count` unique random strings of given length."""
+    names = set()
+    alphabet = string.ascii_lowercase + string.digits
+    while len(names) < count:
+        names.add(''.join(random.choices(alphabet, k=length)))
+    return list(names)
+
 # Main loop
 if __name__ == '__main__':
 
@@ -246,6 +255,13 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
     model.eval()
     print("Modeled again")
+
+    all_names = gen_random_names(30, length=5)
+
+    # 2) Split half→QuaternionSensors, half→NormalSensors
+    half = len(all_names) // 2
+    QuaternionSensors = [(n, None) for n in all_names[:half]]
+    NormalSensors     = [(n, None) for n in all_names[half:]]
     
     data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
     data_writer = csv.writer(data_file)
