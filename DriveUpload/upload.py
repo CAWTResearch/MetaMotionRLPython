@@ -59,11 +59,13 @@ def upload_all_files():
     subfolder = 'Upload_' + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     subfolder_id = create_subfolder(service, subfolder, PARENT_FOLDER_ID)
 
-    # upload every CSV in BASE_DIR
-    for name in os.listdir(BASE_DIR):
-        if name.lower().endswith('.csv'):
-            path = os.path.join(BASE_DIR, name)
+    # only upload these specific files
+    for filename in ('combined_data.csv', 'predictions.csv'):
+        path = os.path.join(BASE_DIR, filename)
+        if os.path.isfile(path):
             upload_file(service, path, subfolder_id)
+        else:
+            print(f"[SKIP] {filename} not found in {BASE_DIR}")
 
 
 if __name__ == '__main__':
