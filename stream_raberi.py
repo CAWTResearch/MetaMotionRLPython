@@ -545,14 +545,14 @@ if __name__ == '__main__':
             elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
             sleep =  loop_start + target_dt
-
-            while time.perf_counter() < sleep:
-                pass
+            
+            if sleep > 0:
+                time.sleep(sleep)
+            
             
             data = CombineData()
             data_writer.writerow(data)
             combinecounter+=1
-
             elapsed   = time.perf_counter() - start_ts
             remainder = elapsed % 0.5
 

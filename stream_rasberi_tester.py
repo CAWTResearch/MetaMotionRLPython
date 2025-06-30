@@ -196,7 +196,7 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-    Data = [random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5), random.randint(1, 5)]
+    Data = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
     
     buffer.append(Data)
     return Data
@@ -295,10 +295,11 @@ if __name__ == '__main__':
         while True:
             elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
-            sleep =  loop_start + target_dt
+            sleep =  next_time - (loop_start)
 
-            while time.perf_counter() < sleep:
-                pass
+            if sleep > 0:
+                time.sleep(sleep)
+            
             
             data = CombineData()
             data_writer.writerow(data)
@@ -315,6 +316,9 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 print(f"{elapsedtime}")
+
+                
+            next_time+= target_dt
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
