@@ -13,17 +13,16 @@ import torch.nn as nn
 from mbientlab.warble import *
 from multiprocessing import Process
 from threading import Thread, Event
-import ctypes, ctypes.util
 
-import joblib
+import joblib, csv
 import numpy as np
 
 # Sensor y dongle MACs
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', 'D8:3A:DD:EA:0C:EF', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93']
-
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93',  '3C:0A:F3:10:17:F0']
+#'D8:3A:DD:EA:0C:EF'
 states = []
 
 buffer = deque(maxlen=50)
@@ -46,6 +45,25 @@ profiles = [
     {"interval":40.0, "latency":2, "timeout":10000},
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
+
+pred_file = open('predictions.csv',   'w', newline='')
+pred_writer = csv.writer(pred_file)
+pred_writer.writerow([
+    'timestamp',
+    'prediction',
+    *[f'prob_{i}' for i in range(output_dim)]
+])
+
+data_file = open('combined_data.csv', 'w', newline='')
+data_writer = csv.writer(data_file)
+# Build combined‐data headers from your sensor lists:
+data_headers = []
+for name,_ in QuaternionSensors:
+    data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
+for name,_ in NormalSensors:
+    data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
+    data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
+data_writer.writerow(data_headers)
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -451,7 +469,7 @@ def CombineData():
             NormalSensors[2][1].get_gyro_X(), NormalSensors[2][1].get_gyro_Y(), NormalSensors[2][1].get_gyro_Z()]
     
     buffer.append(Data)
-    return 
+    return Data
 
 def get_prediction(model):
     prev_time = time.time()
@@ -477,6 +495,10 @@ def get_prediction(model):
             print(f"[inference] Latency: {latency:.4f}s")
 
             print(f"[inference] DeltaT: {DeltaT:.4f}s")
+            timestamp = datetime.datetime.now().isoformat()
+            pred_writer.writerow([timestamp, prediction, *probabilities])
+            pred_file.flush()
+
             prev_time = end_time 
 
 
@@ -527,7 +549,8 @@ if __name__ == '__main__':
             if sleep > 0:
                 time.sleep(sleep)
             
-            CombineData()
+            data = CombineData()
+            data_writer.writerow(data)
             combinecounter+=1
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
@@ -544,6 +567,8 @@ if __name__ == '__main__':
 
     # f) Timer done → clean up & dump
     disconnect_sensors()
+    pred_file.close()
+    data_file.close()
 
     print("All done. Exiting.")
     sys.exit(0)
