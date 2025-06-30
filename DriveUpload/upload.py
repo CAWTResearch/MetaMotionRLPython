@@ -43,7 +43,6 @@ def upload_file(service, file_path, folder_id):
     }
     service.files().create(
         body=file_metadata,
-        supportsAllDrives=True,
         media_body=file_path
     ).execute()
 
