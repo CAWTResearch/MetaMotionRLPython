@@ -16,7 +16,7 @@ if parent not in sys.path:
     sys.path.insert(0, parent)
 
 # 3) Now do a normal (absolute) import
-# from AccurateStreaming import device_macs, dongle_macs
+from AccurateStreaming import device_macs, dongle_macs
 
 def authenticate():
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -42,9 +42,9 @@ def upload_photo(service, file_path, folder_id):
         media_body=file_path
     ).execute()
 
-# def print_devices():
-#     print("Sensors:", device_macs)
-#     print("Dongles:", dongle_macs)
+def print_devices():
+    print("Sensors:", device_macs)
+    print("Dongles:", dongle_macs)
 
 def upload_all_files():
     creds = authenticate()
@@ -56,12 +56,11 @@ def upload_all_files():
     subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
 
     # Upload files to the new subfolder
-    # for device in device_macs:
-    upload_photo(service, 'combined_data.csv', subfolder_id)
+    upload_photo(service, 'combine_data.csv', subfolder_id)
     upload_photo(service, 'predictions.csv', subfolder_id)
 
 if __name__ == "__main__":
-    # print_devices()
+    print_devices()
     upload_all_files()
     print("Files uploaded successfully.")
     print("See Google Drive for the uploaded files.")
