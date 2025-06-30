@@ -46,24 +46,14 @@ profiles = [
     {"interval":7.5, "latency":1, "timeout":10000},
 ]
 
-pred_file = open('predictions.csv',   'w', newline='')
+os.makedirs('DriveUpload', exist_ok=True)
+pred_file = open(os.path.join('DriveUpload', 'predictions.csv'),   'w', newline='')
 pred_writer = csv.writer(pred_file)
 pred_writer.writerow([
     'timestamp',
     'prediction',
     *[f'prob_{i}' for i in range(output_dim)]
 ])
-
-data_file = open('combined_data.csv', 'w', newline='')
-data_writer = csv.writer(data_file)
-# Build combined‐data headers from your sensor lists:
-data_headers = []
-for name,_ in QuaternionSensors:
-    data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
-for name,_ in NormalSensors:
-    data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
-    data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
-data_writer.writerow(data_headers)
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -500,6 +490,7 @@ def get_prediction(model):
             pred_file.flush()
 
             prev_time = end_time 
+            time.sleep(0.02)
 
 
 # Main loop
@@ -520,7 +511,18 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
     model.eval()
     print("Modeled again")
-    
+
+    data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
+    data_writer = csv.writer(data_file)
+    # Build combined‐data headers from your sensor lists:
+    data_headers = []
+    for name,_ in QuaternionSensors:
+        data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
+    for name,_ in NormalSensors:
+        data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
+        data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
+    data_writer.writerow(data_headers)
+
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
