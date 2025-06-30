@@ -40,7 +40,7 @@ def upload_file(service, file_path, folder_id):
         body=file_metadata,
         media_body=file_path
     ).execute()
-    
+
 def print_devices():
     print("Sensors:", device_macs)
     print("Dongles:", dongle_macs)
@@ -55,7 +55,7 @@ def upload_all_files():
     subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
 
     # Define the specific files to upload
-    files_to_upload = ['combined_data.csv', 'predictions.csv']
+    files_to_upload = ['DriveUpload/combined_data.csv', 'DriveUpload/redictions.csv']
     for file_name in files_to_upload:
         file_path = os.path.join(parent, file_name)
         if os.path.exists(file_path):
