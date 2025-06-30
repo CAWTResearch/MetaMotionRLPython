@@ -8,15 +8,18 @@ SCOPES = ['https://www.googleapis.com/auth/drive']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
 PARENT_FOLDER_ID = '16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l'
 
-# Root directory containing CSVs (one level up)
-BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# Directory to scan for CSVs: use current working directory
+BASE_DIR = os.getcwd()
+print(f"Scanning directory: {BASE_DIR}")
+print("Contents:", os.listdir(BASE_DIR))
 
 # Ensure AccurateStreaming module is importable if needed
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
+parent_dir = os.path.abspath(os.path.join(__file__, os.pardir))
+if parent_dir not in sys.path:
+    sys.path.insert(0, parent_dir)
 
+# import for device listing (optional)
 from AccurateStreaming import device_macs, dongle_macs
-
 
 def authenticate():
     creds = service_account.Credentials.from_service_account_file(
@@ -63,6 +66,7 @@ def upload_all_files():
     for filename in ('combined_data.csv', 'predictions.csv'):
         path = os.path.join(BASE_DIR, filename)
         if os.path.isfile(path):
+            print(f"Uploading {filename}")
             upload_file(service, path, subfolder_id)
         else:
             print(f"[SKIP] {filename} not found in {BASE_DIR}")
@@ -71,5 +75,4 @@ def upload_all_files():
 if __name__ == '__main__':
     print_devices()
     upload_all_files()
-    print('Files uploaded successfully.')
-    print('See Google Drive for the uploaded files.')
+    print('Operation complete.')
