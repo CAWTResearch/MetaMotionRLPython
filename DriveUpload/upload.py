@@ -56,7 +56,7 @@ def upload_all_files():
     subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
 
     # Upload files to the new subfolder
-    upload_photo(service, 'combine_data.csv', subfolder_id)
+    upload_photo(service, 'combined_data.csv', subfolder_id)
     upload_photo(service, 'predictions.csv', subfolder_id)
 
 if __name__ == "__main__":
