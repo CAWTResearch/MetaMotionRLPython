@@ -14,14 +14,15 @@ from mbientlab.warble import *
 from multiprocessing import Process
 from threading import Thread, Event
 
-import joblib, csv
+import joblib, csv, math
 import numpy as np
 
 # Sensor y dongle MACs
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93',  '3C:0A:F3:10:17:F0']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
+# '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
 
@@ -490,7 +491,7 @@ def get_prediction(model):
             pred_file.flush()
 
             prev_time = end_time 
-            time.sleep(0.02)
+            time.sleep(0.04)
 
 
 # Main loop
@@ -539,29 +540,36 @@ if __name__ == '__main__':
         t1 = Thread(target=get_prediction, args=(model,), daemon=True)
         t1.start()
 
-        start_ts = time.time()
-        next_time = time.perf_counter()
+        start_ts = time.perf_counter()
+        next_time = start_ts + target_dt
         screen_limit = 25
-        current_interval = time.monotonic()
         while True:
+            elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
-            deadline = next_time
-            sleep =  deadline - loop_start 
+            sleep =  next_time - (loop_start)
 
-            if sleep > 0:
-                time.sleep(sleep)
+            if sleep > 0.002:
+                time.sleep(sleep - 0.001)
+            
             
             data = CombineData()
             data_writer.writerow(data)
             combinecounter+=1
 
+            elapsed   = time.perf_counter() - start_ts
+            remainder = elapsed % 0.5
+
+            # trigger if we’re within ±ε of the 0‐mark
+            if math.isclose(remainder, 0.0, abs_tol=0.02):
+                combinecounter = 25
+
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
-                current_interval = time.monotonic()
-                elapsedtime= time.time()-start_ts
                 print(f"{elapsedtime}")
-            next_time+=(1/50) 
+
+                
+            next_time+= target_dt
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
