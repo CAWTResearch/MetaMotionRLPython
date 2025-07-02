@@ -6,7 +6,7 @@ from mbientlab.metawear.cbindings import (
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, signal, sys, threading, datetime
+import subprocess, time, sys, threading, datetime, os
 from collections import deque
 import torch
 import torch.nn as nn
@@ -20,7 +20,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0']
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
@@ -121,6 +121,7 @@ class State:
         val = parse_value(data_ptr)
         ts  = time.monotonic()
         self.acc_deque.append((ts, val.x, val.y, val.z))
+        self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
 
         self.acc_count += 1
 
@@ -129,16 +130,16 @@ class State:
         val = parse_value(data_ptr)
         ts  = time.monotonic()
         self.gyro_deque.append((ts, val.x, val.y, val.z))
-
+        self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
        
         self.gyro_count += 1
     
     def quaternion_handler(self, ctx, data_ptr):
-        v = parse_value(data_ptr)
+        val = parse_value(data_ptr)
         ts = time.monotonic()
-        self.quat_deque.append((ts, v.w, v.x, v.y, v.z))
-        self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = v.w, v.x, v.y, v.z
-
+        self.quat_deque.append((ts, val.w, val.x, val.y, val.z))
+        self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
+        self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_count += 1
 
     def get_acc_cb(self):
@@ -438,26 +439,23 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []
-    # 1) One quaternion sample per quat‐sensor
+
     for name, st in QuaternionSensors:
+        # --- QUAT ---
         if len(st.quat_deque) >0:
                 _, w1, x1, y1, z1 = st.quat_deque.popleft()
         else:
             w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
-        # clear any extras so the next tick starts fresh
-        st.quat_deque.clear()
 
-        # append both samples
         data += [w1, x1, y1, z1]
 
-    # 2) One acc+gyro per normal sensor
     for name, st in NormalSensors:
+        # --- ACC ---
         if len(st.acc_deque) >0:
              _, ax1, ay1, az1 = st.acc_deque.popleft()
              
         else:
             ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
-        st.acc_deque.clear()
 
         # --- GYRO ---    
         if len(st.gyro_deque) > 0:
@@ -465,7 +463,6 @@ def CombineData():
 
         else:
             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
-        st.gyro_deque.clear()
 
         # append both accel + both gyro
         data += [
@@ -494,7 +491,6 @@ def get_prediction(model):
             DeltaT = end_time - prev_time
             latency = (end_time - start_time)
 
-
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             print(f"[inference] Latency: {latency:.4f}s")
@@ -506,7 +502,6 @@ def get_prediction(model):
 
             prev_time = end_time 
             time.sleep(0.1)
-
 
 # Main loop
 if __name__ == '__main__':
@@ -537,18 +532,6 @@ if __name__ == '__main__':
         data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
         data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
     data_writer.writerow(data_headers)
-
-    # d) Allow Ctrl+C to abort early
-    # def on_exit(sig, frame):
-    #     print("\nInterrupted by user!")
-
-    #     disconnect_sensors()
-    #     pred_file.close()
-    #     data_file.close()
-
-    #     sys.exit(0)
-
-    # signal.signal(signal.SIGINT, on_exit)
 
     try:
         print("tried")
