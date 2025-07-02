@@ -4,20 +4,38 @@ import os
 # Load the CSV into a DataFrame
 df = pd.read_csv('DriveUpload/combined_data.csv')
 
-# Determine if each row is identical to the previous row
-df['is_repeat'] = df.eq(df.shift()).all(axis=1)
-repeat_count = int(df['is_repeat'].sum())
+# 1) Identify only the sensor columns that start with 'n'
+sensor_cols = [c for c in df.columns if c.startswith('n')]
 
-# For convenience, fill the first row's repeat flag as False
-df.loc[0, 'is_repeat'] = False
+# 2) For each of those sensors, compare to the value in the previous row
+for sensor in sensor_cols:
+    # Boolean column: True if this row's sample == previous row's sample
+    df[f'{sensor}_is_repeat'] = df[sensor].eq(df[sensor].shift())
+    # First row has no “previous”—mark it False
+    df.loc[0, f'{sensor}_is_repeat'] = False
 
-# Save the result to a new CSV
-output_path = 'DriveUpload/repeat_detection.csv'
-df.to_csv(output_path, index=False)
+# 3) (Optional) Count repeats per sensor
+repeat_counts = {
+    sensor: int(df[f'{sensor}_is_repeat'].sum())
+    for sensor in sensor_cols
+}
 
-print("Total repeat rows:", repeat_count)
-print(f"Processed {len(df)} rows. Results saved to '{output_path}'.")
-print(f"Percent of repeats: {repeat_count/len(df)}")
+# 4) (Optional) Percent of repeats per sensor
+repeat_percents = {
+    sensor: repeat_counts[sensor] / (len(df) - 1)  # exclude first row
+    for sensor in sensor_cols
+}
+
+# Print summary
+for sensor in sensor_cols:
+    print(f"{sensor}: {repeat_counts[sensor]} repeats, "
+          f"{repeat_percents[sensor]:.2%} of intervals")
+
+# 5) (Optional) If you still want a single “any-n-repeat” column:
+df['any_n_repeat'] = df[[f'{sensor}_is_repeat' for sensor in sensor_cols]].any(axis=1)
+
+print("Total rows where any 'n' sensor repeated:", int(df['any_n_repeat'].sum()))
+print("Percent of rows with any 'n' repeat:", df['any_n_repeat'].mean())
 
 def main():
     # Path to your predictions CSV

@@ -290,27 +290,32 @@ if __name__ == '__main__':
         t1.start()
 
         start_ts = time.perf_counter()
-        next_time = start_ts + target_dt
+        next_time = start_ts
         screen_limit = 25
+        count=0
         while True:
+            count+=1
             elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
-            sleep =  next_time - (loop_start)
+            # sleep =  next_time - (loop_start)
 
-            if sleep > 0:
-                time.sleep(sleep)
-            
+            # if sleep > 0:
+            #     time.sleep(sleep)
+            next_call = start_ts + count * target_dt
+            sleep_for = next_call - time.perf_counter()
+            if sleep_for > 0:
+                time.sleep(sleep_for)
             
             data = CombineData()
             data_writer.writerow(data)
             combinecounter+=1
 
-            elapsed   = time.perf_counter() - start_ts
-            remainder = elapsed % 0.5
+            # elapsed   = time.perf_counter() - start_ts
+            # remainder = elapsed % 0.5
 
-            # trigger if we’re within ±ε of the 0‐mark
-            if math.isclose(remainder, 0.0, abs_tol=0.02):
-                combinecounter = 25
+            # # trigger if we’re within ±ε of the 0‐mark
+            # if math.isclose(remainder, 0.0, abs_tol=0.005):
+            #     combinecounter = 25
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1

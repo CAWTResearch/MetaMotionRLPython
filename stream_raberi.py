@@ -21,7 +21,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0']
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
@@ -40,11 +40,11 @@ NormalSensors = []
 
 profiles = [
     {"interval":8.75, "latency":5, "timeout":10000},
-    {"interval":10.0, "latency":6, "timeout":10000},
-    {"interval":11.25, "latency":4, "timeout":10000},
-    {"interval":35.0, "latency":3, "timeout":10000},
-    {"interval":40.0, "latency":2, "timeout":10000},
-    {"interval":7.5, "latency":1, "timeout":10000},
+    {"interval":10.0, "latency":4, "timeout":10000},
+    {"interval":11.25, "latency":3, "timeout":10000},
+    {"interval":12.5, "latency":2, "timeout":10000},
+    {"interval":13.75, "latency":1, "timeout":10000},
+    {"interval":7.5, "latency":0, "timeout":10000},
 ]
 
 os.makedirs('DriveUpload', exist_ok=True)
@@ -109,46 +109,38 @@ class State:
 
         
         # Prepare callback wrappers
-        self.acc_cb  = FnVoid_VoidP_DataP(self.acc_data_handler)
+        self.acc_deque = deque(maxlen=2)
+        self.acc_cb   = FnVoid_VoidP_DataP(self.acc_data_handler)
+        self.gyro_deque= deque(maxlen=2)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
+        self.quat_deque = deque(maxlen=2)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
 
 
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
-        x, y, z = val.x, val.y, val.z
-
-        self.acc_X = x
-        self.acc_Y = y
-        self.acc_Z = z
+        ts  = time.monotonic()
+        self.acc_deque.append((ts, val.x, val.y, val.z))
 
         self.acc_count += 1
 
 
     def gyro_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
-        x, y, z = val.x, val.y, val.z
-
-        self.gyro_X = x
-        self.gyro_Y = y
-        self.gyro_Z = z
+        ts  = time.monotonic()
+        self.gyro_deque.append((ts, val.x, val.y, val.z))
 
        
         self.gyro_count += 1
     
     def quaternion_handler(self, ctx, data_ptr):
-        val = parse_value(data_ptr)
-        w, x, y, z = val.w, val.x, val.y, val.z
-
-        self.quat_W = w
-        self.quat_X = x 
-        self.quat_Y = y
-        self.quat_Z = z
+        v = parse_value(data_ptr)
+        ts = time.monotonic()
+        self.quat_deque.append((ts, v.w, v.x, v.y, v.z))
+        self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = v.w, v.x, v.y, v.z
 
         self.quat_count += 1
-
-
 
     def get_acc_cb(self):
         return self.acc_cb
@@ -266,14 +258,14 @@ def configureNormal(states, N_Quantaty):
         time.sleep(1.5)
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
-        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
+        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._500dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
         NormalSensors.append((Sensor_Names[i],st))
@@ -449,18 +441,47 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-    Data = [QuaternionSensors[0][1].get_quat_W(), QuaternionSensors[0][1].get_quat_X(), QuaternionSensors[0][1].get_quat_Y(), QuaternionSensors[0][1].get_quat_Z(),
-            QuaternionSensors[1][1].get_quat_W(), QuaternionSensors[1][1].get_quat_X(), QuaternionSensors[1][1].get_quat_Y(), QuaternionSensors[1][1].get_quat_Z(),
-            QuaternionSensors[2][1].get_quat_W(), QuaternionSensors[2][1].get_quat_X(), QuaternionSensors[2][1].get_quat_Y(), QuaternionSensors[2][1].get_quat_Z(),
-            NormalSensors[0][1].get_acc_X(), NormalSensors[0][1].get_acc_Y(), NormalSensors[0][1].get_acc_Z(),
-            NormalSensors[0][1].get_gyro_X(), NormalSensors[0][1].get_gyro_Y(), NormalSensors[0][1].get_gyro_Z(),
-            NormalSensors[1][1].get_acc_X(), NormalSensors[1][1].get_acc_Y(), NormalSensors[1][1].get_acc_Z(),
-            NormalSensors[1][1].get_gyro_X(), NormalSensors[1][1].get_gyro_Y(), NormalSensors[1][1].get_gyro_Z(),
-            NormalSensors[2][1].get_acc_X(), NormalSensors[2][1].get_acc_Y(), NormalSensors[2][1].get_acc_Z(),
-            NormalSensors[2][1].get_gyro_X(), NormalSensors[2][1].get_gyro_Y(), NormalSensors[2][1].get_gyro_Z()]
-    
-    buffer.append(Data)
-    return Data
+    data = []
+    # 1) One quaternion sample per quat‐sensor
+    for name, st in QuaternionSensors:
+        if len(st.quat_deque) >1:
+                _, w1, x1, y1, z1 = st.quat_deque.popleft()
+            
+            # not enough in queue → duplicate last‐seen
+        else:
+            w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
+        # clear any extras so the next tick starts fresh
+        st.quat_deque.clear()
+
+        # append both samples
+        data += [w1, x1, y1, z1]
+
+    # 2) One acc+gyro per normal sensor
+    for name, st in NormalSensors:
+        if len(st.acc_deque) >0:
+             _, ax1, ay1, az1 = st.acc_deque.popleft()
+             
+        else:
+            ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
+        st.acc_deque.clear()
+
+        # --- GYRO ---    
+        if len(st.gyro_deque) > 0:
+                _, gx1, gy1, gz1 = st.gyro_deque.popleft()
+
+        else:
+            gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
+        st.gyro_deque.clear()
+
+        # append both accel + both gyro
+        data += [
+            ax1, ay1, az1,
+            gx1, gy1, gz1
+        ]
+
+    # 3) feed into your sliding window
+    buffer.append(data)
+    return data
 
 def get_prediction(model):
     prev_time = time.time()
@@ -491,6 +512,7 @@ def get_prediction(model):
             pred_file.flush()
 
             prev_time = end_time 
+            time.sleep(0.1)
 
 
 # Main loop
@@ -526,7 +548,10 @@ if __name__ == '__main__':
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):
         print("\nInterrupted by user!")
+
         disconnect_sensors()
+        pred_file.close()
+        data_file.close()
 
         sys.exit(0)
 
@@ -540,32 +565,25 @@ if __name__ == '__main__':
         t1.start()
 
         start_ts = time.perf_counter()
-        next_time = start_ts + target_dt
         screen_limit = 25
+        count =0
         while True:
+            count +=1
             elapsedtime= time.perf_counter()-start_ts
             loop_start = time.perf_counter()
-            sleep =  next_time - (loop_start)
-
-            if sleep > 0:
-                time.sleep(sleep)
-            
+            next_call = start_ts + count * target_dt
+            sleep_for = next_call - time.perf_counter()
+            if sleep_for > 0:
+                time.sleep(sleep_for)
             
             data = CombineData()
             data_writer.writerow(data)
             combinecounter+=1
-            elapsed   = time.perf_counter() - start_ts
-            remainder = elapsed % 0.5
-
-            # trigger if we’re within ±ε of the 0‐mark
-            if math.isclose(remainder, 0.0, abs_tol=0.02):
-                combinecounter = 25
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
                 combinecounter =1
                 predicted_event.clear()
                 print(f"{elapsedtime}")
-            next_time+= target_dt
         
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
