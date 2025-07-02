@@ -22,7 +22,7 @@ int main() {
     }
     auto t1 = std::chrono::high_resolution_clock::now();
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0);
 
     std::cout << "Elapsed time: "
               << elapsed.count() << " ms\n";
