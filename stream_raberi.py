@@ -11,17 +11,16 @@ from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
-from multiprocessing import Process
 from threading import Thread, Event
 
-import joblib, csv, math
+import joblib, csv
 import numpy as np
 
 # Sensor y dongle MACs
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
@@ -317,9 +316,6 @@ def configure_and_subscribe_sensors(states, Int_Quaternions, Int_Normals):
     subscribe_sensors()
     return    
 
-# Desconexión limpia
-# Replace your old disconnect_sensors() with this:
-
 def disconnect_sensors():
     for st in states:
         b = st.device.board
@@ -444,10 +440,8 @@ def CombineData():
     data = []
     # 1) One quaternion sample per quat‐sensor
     for name, st in QuaternionSensors:
-        if len(st.quat_deque) >1:
+        if len(st.quat_deque) >0:
                 _, w1, x1, y1, z1 = st.quat_deque.popleft()
-            
-            # not enough in queue → duplicate last‐seen
         else:
             w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
         # clear any extras so the next tick starts fresh
@@ -479,7 +473,6 @@ def CombineData():
             gx1, gy1, gz1
         ]
 
-    # 3) feed into your sliding window
     buffer.append(data)
     return data
 

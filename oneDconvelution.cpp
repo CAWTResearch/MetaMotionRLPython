@@ -1,8 +1,9 @@
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 int main() {
-
+    auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<int> signal(1024);
     for (int i = 0; i < 1024; i++) {
         signal[i] = i + 1;
@@ -19,10 +20,12 @@ int main() {
         }
         result[i] = sum;
     }
+    auto t1 = std::chrono::high_resolution_clock::now();
 
-    for (int i = 0; i < result.size(); i++) {
-        std::cout << result[i] << " ";
-    }
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0);
+
+    std::cout << "Elapsed time: "
+              << elapsed.count() << " ms\n";
 
     return 0;
 }
