@@ -3,6 +3,7 @@ import os
 
 # Load the CSV into a DataFrame
 df = pd.read_csv('DriveUpload/combined_data.csv')
+print(f"Total rows in combined_data.csv: {len(df)}")
 
 # 1) Identify only the sensor columns that start with 'n'
 sensor_cols = [c for c in df.columns if c.startswith('n')]
