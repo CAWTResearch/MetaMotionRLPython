@@ -539,16 +539,16 @@ if __name__ == '__main__':
     data_writer.writerow(data_headers)
 
     # d) Allow Ctrl+C to abort early
-    def on_exit(sig, frame):
-        print("\nInterrupted by user!")
+    # def on_exit(sig, frame):
+    #     print("\nInterrupted by user!")
 
-        disconnect_sensors()
-        pred_file.close()
-        data_file.close()
+    #     disconnect_sensors()
+    #     pred_file.close()
+    #     data_file.close()
 
-        sys.exit(0)
+    #     sys.exit(0)
 
-    signal.signal(signal.SIGINT, on_exit)
+    # signal.signal(signal.SIGINT, on_exit)
 
     try:
         print("tried")
@@ -581,11 +581,11 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
         pass
+    finally:
+        # f) Timer done → clean up & dump
+        disconnect_sensors()
+        pred_file.close()
+        data_file.close()
 
-    # f) Timer done → clean up & dump
-    disconnect_sensors()
-    pred_file.close()
-    data_file.close()
-
-    print("All done. Exiting.")
-    sys.exit(0)
+        print("All done. Exiting.")
+        sys.exit(0)
