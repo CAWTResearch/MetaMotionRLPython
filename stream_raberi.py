@@ -108,11 +108,11 @@ class State:
 
         
         # Prepare callback wrappers
-        self.acc_deque = deque(maxlen=2)
+        self.acc_deque = deque(maxlen=3)
         self.acc_cb   = FnVoid_VoidP_DataP(self.acc_data_handler)
-        self.gyro_deque= deque(maxlen=2)
+        self.gyro_deque= deque(maxlen=3)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
-        self.quat_deque = deque(maxlen=2)
+        self.quat_deque = deque(maxlen=3)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
         
 
