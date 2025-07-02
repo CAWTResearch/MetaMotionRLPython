@@ -58,10 +58,13 @@ def main():
     min_interval = deltas.min()
     max_interval = deltas.max()
 
+    total_duration = (df['timestamp'].iloc[-1] - df['timestamp'].iloc[0]).total_seconds() + 1
+
     # Output results
     print(f"Average interval: {avg_interval:.6f} seconds")
     print(f"Minimum interval: {min_interval:.6f} seconds")
     print(f"Maximum interval: {max_interval:.6f} seconds")
+    print(f"Total test duration: {total_duration:.6f} seconds")
 
 if __name__ == '__main__':
     main()

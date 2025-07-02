@@ -38,11 +38,11 @@ QuaternionSensors = []
 NormalSensors = []
 
 profiles = [
-    {"interval":8.75, "latency":5, "timeout":10000},
-    {"interval":10.0, "latency":4, "timeout":10000},
-    {"interval":11.25, "latency":3, "timeout":10000},
-    {"interval":12.5, "latency":2, "timeout":10000},
-    {"interval":13.75, "latency":1, "timeout":10000},
+    {"interval":8.75, "latency":0, "timeout":10000},
+    {"interval":10.0, "latency":0, "timeout":10000},
+    {"interval":11.25, "latency":0, "timeout":10000},
+    {"interval":12.5, "latency":0, "timeout":10000},
+    {"interval":13.75, "latency":0, "timeout":10000},
     {"interval":7.5, "latency":0, "timeout":10000},
 ]
 
@@ -439,7 +439,10 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []
-
+    # if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
+    # or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
+    # or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
+    #     time.sleep(0.003)  
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
@@ -460,7 +463,6 @@ def CombineData():
         # --- GYRO ---    
         if len(st.gyro_deque) > 0:
                 _, gx1, gy1, gz1 = st.gyro_deque.popleft()
-
         else:
             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
 
