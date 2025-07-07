@@ -3,7 +3,7 @@
 #include <chrono>
 
 int main() {
-    auto t0 = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point t0 = std::chrono::high_resolution_clock::now();
     std::vector<int> signal(1024);
     for (int i = 0; i < 1024; i++) {
         signal[i] = i + 1;
@@ -20,9 +20,9 @@ int main() {
         }
         result[i] = sum;
     }
-    auto t1 = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0);
+    std::chrono::nanoseconds elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0);
 
     std::cout << "Elapsed time: "
               << elapsed.count() << " ms\n";

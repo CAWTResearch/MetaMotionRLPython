@@ -20,7 +20,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0']
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
@@ -86,26 +86,25 @@ def force_disconnect_sensors():
 # Clase de estado para escribir CSV directamente en callbacks
 
 class State:
+    acc_Y = 0 
+    acc_X = 0
+    acc_Z = 0 
+
+    gyro_Y = 0
+    gyro_X = 0
+    gyro_Z = 0
+
+    quat_W = 0
+    quat_X = 0
+    quat_Y = 0
+    quat_Z = 0
+
     def __init__(self, device):
         self.device = device
 
         self.acc_count  = 0
         self.gyro_count = 0
         self.quat_count = 0
-
-        self.acc_Y = 0
-        self.acc_X = 0
-        self.acc_Z = 0
-
-        self.gyro_Y = 0
-        self.gyro_X = 0
-        self.gyro_Z = 0
-
-        self.quat_W = 0
-        self.quat_X = 0
-        self.quat_Y = 0
-        self.quat_Z = 0
-
         
         # Prepare callback wrappers
         self.acc_deque = deque(maxlen=3)
@@ -114,8 +113,6 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quat_deque = deque(maxlen=3)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
-        
-
 
     def acc_data_handler(self, ctx, data_ptr):
         val = parse_value(data_ptr)
@@ -151,7 +148,6 @@ class State:
     def get_quaternion_cb(self):
         return self.quaternion_cb
     
-    
     def get_acc_Y(self):
         return self.acc_Y
     
@@ -161,15 +157,14 @@ class State:
     def get_acc_Z(self):
         return self.acc_Z
     
-
-    
     def get_gyro_Y(self):
         return self.gyro_Y
+    
     def get_gyro_X(self):
         return self.gyro_X
+    
     def get_gyro_Z(self):
         return self.gyro_Z
-    
     
     def get_quat_W(self):
         return self.quat_W
@@ -222,7 +217,7 @@ def configureQuaternions(states, Q_Quantaty):
             settings["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(d.board, 4)
+        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
         time.sleep(1.5)
 
         # Configuración de Sensor Fusion
@@ -258,13 +253,13 @@ def configureNormal(states, N_Quantaty):
         time.sleep(1.5)
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._500dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
@@ -438,11 +433,7 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-    data = []
-    # if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
-    # or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
-    # or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
-    #     time.sleep(0.003)  
+    data = []  
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
@@ -459,12 +450,15 @@ def CombineData():
              
         else:
             ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
+            
 
         # --- GYRO ---    
         if len(st.gyro_deque) > 0:
                 _, gx1, gy1, gz1 = st.gyro_deque.popleft()
         else:
             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
+            print("Pop Here --++_+___+_+_++_+_+")
+            print(f"{gx1, gy1, gz1}")
 
         # append both accel + both gyro
         data += [
