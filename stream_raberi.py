@@ -20,7 +20,8 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0'
+]
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
@@ -291,12 +292,12 @@ def configureNormal(states, N_Quantaty):
         # ACC file
         st._acc_fh = open(st.acc_file,  "w", newline='')
         st._acc_writer = csv.writer(st._acc_fh)
-        st._acc_writer.writerow(['host_time',f'{Sensor_Names[i]}_acc_x', f'{Sensor_Names[i]}_acc_y', f'{Sensor_Names[i]}_acc_z'])
+        st._acc_writer.writerow(['host_time',Sensor_Names[i]+'_acc_x', Sensor_Names[i]+'_acc_y', Sensor_Names[i]+ '_acc_z'])
 
         # GYRO file
         st._gyro_fh = open(st.gyro_file, "w", newline='')
         st._gyro_writer = csv.writer(st._gyro_fh)
-        st._gyro_writer.writerow(['host_time', f'{Sensor_Names[i]}_gyro_x',f'{Sensor_Names[i]}_gyro_y', f'{Sensor_Names[i]}_gyro_z'])
+        st._gyro_writer.writerow(['host_time', Sensor_Names[i] + '_gyro_x', Sensor_Names[i] + '_gyro_y', Sensor_Names[i] + '_gyro_z'])
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
@@ -491,7 +492,7 @@ def CombineData():
         or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
         or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
         print("delayed:(")
-        time.sleep(0.003)  
+        time.sleep(0.009)  
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
