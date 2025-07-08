@@ -119,60 +119,38 @@ class State:
     
     def quaternion_handler(self, ctx, data_ptr):
 
-        # 1) sensor timestamp → human‐readable
-        sensor_time = datetime.datetime.fromtimestamp(
-            data_ptr.contents.epoch / 1000.0
-        ).strftime('%H:%M:%S.%f')
-        # 2) host timestamp
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         val = parse_value(data_ptr)
-        ts = time.monotonic()
-        self.quat_deque.append((ts, val.w, val.x, val.y, val.z))
+        self.quat_deque.append(( val.w, val.x, val.y, val.z))
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
-        self._quat_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._quat_writer.writerow([host_time, val.w, val.x, val.y, val.z])
         self._quat_fh.flush()
         self.quat_count += 1
 
-        self.time = sensor_time
-
-
     def acc_data_handler(self, ctx, data_ptr):
 
-        # 1) sensor timestamp → human‐readable
-        sensor_time = datetime.datetime.fromtimestamp(
-            data_ptr.contents.epoch / 1000.0
-        ).strftime('%H:%M:%S.%f')
-        # 2) host timestamp
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         # 3) parse x,y,z
         val = parse_value(data_ptr)
-        ts = time.monotonic()
-        self.acc_deque.append((ts, val.x, val.y, val.z))
+        self.acc_deque.append((val.x, val.y, val.z))
         self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
 
-        self._acc_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._acc_writer.writerow([host_time, val.x, val.y, val.z])
         self._acc_fh.flush()
         self.acc_count += 1
 
-        self.time = sensor_time
 
     def gyro_data_handler(self, ctx, data_ptr):
 
-        # Same as above, but for gyroscope
-        sensor_time = datetime.datetime.fromtimestamp(
-            data_ptr.contents.epoch / 1000.0
-        ).strftime('%H:%M:%S.%f')
         host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         val = parse_value(data_ptr)
-        ts = time.monotonic()
-        self.gyro_deque.append((ts, val.x, val.y, val.z))
+        self.gyro_deque.append((val.x, val.y, val.z))
         self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
 
-        self._gyro_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._gyro_writer.writerow([host_time, val.x, val.y, val.z])
         self._gyro_fh.flush()
         self.gyro_count += 1
-        self.time = sensor_time
 
 
     def get_acc_cb(self):
@@ -264,7 +242,7 @@ def configureQuaternions(states, Q_Quantaty):
         # QUAT file
         st._quat_fh = open(st.quat_file,  "w", newline='')
         st._quat_writer = csv.writer(st._quat_fh)
-        st._quat_writer.writerow(['host_time','sensor_time','quat_w' ,'quat_x','quat_y','quat_z'])
+        st._quat_writer.writerow(['host_time',f'{Sensor_Names[i]}_w' ,f'{Sensor_Names[i]}_x',f'{Sensor_Names[i]}_y',f'{Sensor_Names[i]}_z'])
         
         libmetawear.mbl_mw_settings_set_connection_parameters(
             d.board,
@@ -313,12 +291,12 @@ def configureNormal(states, N_Quantaty):
         # ACC file
         st._acc_fh = open(st.acc_file,  "w", newline='')
         st._acc_writer = csv.writer(st._acc_fh)
-        st._acc_writer.writerow(['host_time','sensor_time','acc_x','acc_y','acc_z'])
+        st._acc_writer.writerow(['host_time',f'{Sensor_Names[i]}_acc_x', f'{Sensor_Names[i]}_acc_y', f'{Sensor_Names[i]}_acc_z'])
 
         # GYRO file
         st._gyro_fh = open(st.gyro_file, "w", newline='')
         st._gyro_writer = csv.writer(st._gyro_fh)
-        st._gyro_writer.writerow(['host_time','sensor_time','gyro_x','gyro_y','gyro_z'])
+        st._gyro_writer.writerow(['host_time', f'{Sensor_Names[i]}_gyro_x',f'{Sensor_Names[i]}_gyro_y', f'{Sensor_Names[i]}_gyro_z'])
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
@@ -517,7 +495,7 @@ def CombineData():
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
-                _, w1, x1, y1, z1 = st.quat_deque.popleft()
+                w1, x1, y1, z1 = st.quat_deque.popleft()
         else:
             w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
 
@@ -526,15 +504,14 @@ def CombineData():
     for name, st in NormalSensors:
         # --- ACC ---
         if len(st.acc_deque) >0:
-             _, ax1, ay1, az1 = st.acc_deque.popleft()
+            ax1, ay1, az1 = st.acc_deque.popleft()
              
         else:
             ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
             
-
         # --- GYRO ---    
         if len(st.gyro_deque) > 0:
-                _, gx1, gy1, gz1 = st.gyro_deque.popleft()
+            gx1, gy1, gz1 = st.gyro_deque.popleft()
         else:
             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
         # append both accel + both gyro
