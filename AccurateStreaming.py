@@ -339,17 +339,17 @@ if __name__ == '__main__':
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states)
-    def best_sensor():
-        max_samples= 0
-        best = states[0]
-        for st in states:
-            if max_samples< st.gyro_count:
-                max_samples = st.gyro_count
-                best = st
-            if max_samples< st.acc_count:
-                max_samples = st.acc_count
-                best = st
-        return best
+    # def best_sensor():
+    #     max_samples= 0
+    #     best = states[0]
+    #     for st in states:
+    #         if max_samples< st.gyro_count:
+    #             max_samples = st.gyro_count
+    #             best = st
+    #         if max_samples< st.acc_count:
+    #             max_samples = st.acc_count
+    #             best = st
+    #     return best
 
     # d) Allow Ctrl+C to abort early
     def on_exit(sig, frame):

@@ -86,18 +86,6 @@ def force_disconnect_sensors():
 # Clase de estado para escribir CSV directamente en callbacks
 
 class State:
-    acc_Y = 0 
-    acc_X = 0
-    acc_Z = 0 
-
-    gyro_Y = 0
-    gyro_X = 0
-    gyro_Z = 0
-
-    quat_W = 0
-    quat_X = 0
-    quat_Y = 0
-    quat_Z = 0
 
     def __init__(self, device):
         self.device = device
@@ -105,6 +93,21 @@ class State:
         self.acc_count  = 0
         self.gyro_count = 0
         self.quat_count = 0
+
+        self.acc_Y = 0 
+        self.acc_X = 0
+        self.acc_Z = 0 
+
+        self.gyro_Y = 0
+        self.gyro_X = 0
+        self.gyro_Z = 0
+
+        self.quat_W = 0
+        self.quat_X = 0
+        self.quat_Y = 0
+        self.quat_Z = 0
+        
+        self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         
         # Prepare callback wrappers
         self.acc_deque = deque(maxlen=3)
@@ -113,31 +116,64 @@ class State:
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
         self.quat_deque = deque(maxlen=3)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
-
-    def acc_data_handler(self, ctx, data_ptr):
-        val = parse_value(data_ptr)
-        ts  = time.monotonic()
-        self.acc_deque.append((ts, val.x, val.y, val.z))
-        self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
-
-        self.acc_count += 1
-
-
-    def gyro_data_handler(self, ctx, data_ptr):
-        val = parse_value(data_ptr)
-        ts  = time.monotonic()
-        self.gyro_deque.append((ts, val.x, val.y, val.z))
-        self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
-       
-        self.gyro_count += 1
     
     def quaternion_handler(self, ctx, data_ptr):
+
+        # 1) sensor timestamp → human‐readable
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).strftime('%H:%M:%S.%f')
+        # 2) host timestamp
+        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         val = parse_value(data_ptr)
         ts = time.monotonic()
         self.quat_deque.append((ts, val.w, val.x, val.y, val.z))
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
+        self._quat_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._quat_fh.flush()
         self.quat_count += 1
+
+        self.time = sensor_time
+
+
+    def acc_data_handler(self, ctx, data_ptr):
+
+        # 1) sensor timestamp → human‐readable
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).strftime('%H:%M:%S.%f')
+        # 2) host timestamp
+        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        # 3) parse x,y,z
+        val = parse_value(data_ptr)
+        ts = time.monotonic()
+        self.acc_deque.append((ts, val.x, val.y, val.z))
+        self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
+
+        self._acc_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._acc_fh.flush()
+        self.acc_count += 1
+
+        self.time = sensor_time
+
+    def gyro_data_handler(self, ctx, data_ptr):
+
+        # Same as above, but for gyroscope
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).strftime('%H:%M:%S.%f')
+        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        val = parse_value(data_ptr)
+        ts = time.monotonic()
+        self.gyro_deque.append((ts, val.x, val.y, val.z))
+        self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
+
+        self._gyro_writer.writerow([host_time, sensor_time, val.x, val.y, val.z])
+        self._gyro_fh.flush()
+        self.gyro_count += 1
+        self.time = sensor_time
+
 
     def get_acc_cb(self):
         return self.acc_cb
@@ -168,12 +204,20 @@ class State:
     
     def get_quat_W(self):
         return self.quat_W
+    
     def get_quat_X(self):
         return self.quat_X
+    
     def get_quat_Y(self):
         return self.quat_Y
+    
     def get_quat_Z(self):
         return self.quat_Z
+    
+    def close_files(self):
+        self._acc_fh.close()
+        self._gyro_fh.close()
+        self._quat_fh.close()
 
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
@@ -208,6 +252,19 @@ def configureQuaternions(states, Q_Quantaty):
         d = st.device
         print("Configuring device Quaternion" + d.address + " Type   :   " + Sensor_Names[i])
 
+        base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
+        os.makedirs(base_dir, exist_ok=True)
+
+        # Remember each sensor's MAC (without colons) to name files
+        mac_no_colon = st.device.address
+
+        # Full paths where we’ll dump at the end:
+        st.quat_file  = os.path.join(base_dir, f"quat_{mac_no_colon}.csv")
+
+        # QUAT file
+        st._quat_fh = open(st.quat_file,  "w", newline='')
+        st._quat_writer = csv.writer(st._quat_fh)
+        st._quat_writer.writerow(['host_time','sensor_time','quat_w' ,'quat_x','quat_y','quat_z'])
         
         libmetawear.mbl_mw_settings_set_connection_parameters(
             d.board,
@@ -216,6 +273,7 @@ def configureQuaternions(states, Q_Quantaty):
             settings["latency"],
             settings["timeout"]
         )
+
         time.sleep(1.5)
         libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
         time.sleep(1.5)
@@ -240,6 +298,27 @@ def configureNormal(states, N_Quantaty):
         print(str(len(states[0:N_Quantaty])))
         b = st.device.board
         print("Configuring device Normal " + st.device.address + " Type   :   " + Sensor_Names[i])
+        # Base folder for final CSVs; ensure it exists
+        base_dir = os.path.join(os.path.dirname(__file__), "DriveUpload")
+        os.makedirs(base_dir, exist_ok=True)
+
+        # Remember each sensor's MAC (without colons) to name files
+        mac_no_colon = st.device.address
+
+        # Full paths where we’ll dump at the end:
+        st.acc_file  = os.path.join(base_dir, f"acc_{mac_no_colon}.csv")
+        st.gyro_file = os.path.join(base_dir, f"gyro_{mac_no_colon}.csv")
+
+
+        # ACC file
+        st._acc_fh = open(st.acc_file,  "w", newline='')
+        st._acc_writer = csv.writer(st._acc_fh)
+        st._acc_writer.writerow(['host_time','sensor_time','acc_x','acc_y','acc_z'])
+
+        # GYRO file
+        st._gyro_fh = open(st.gyro_file, "w", newline='')
+        st._gyro_writer = csv.writer(st._gyro_fh)
+        st._gyro_writer.writerow(['host_time','sensor_time','gyro_x','gyro_y','gyro_z'])
 
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b,
@@ -253,13 +332,13 @@ def configureNormal(states, N_Quantaty):
         time.sleep(1.5)
 
         # ACC: set ODR and range
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._50Hz)
+        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._50Hz)
+        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
         libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._500dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
@@ -295,7 +374,6 @@ def subscribe_sensors():
         st = Sensor[1]
         d = Sensor[1].device
 
-        
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(d.board, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.get_quaternion_cb())
         libmetawear.mbl_mw_sensor_fusion_enable_data(d.board, SensorFusionData.QUATERNION)
@@ -321,11 +399,9 @@ def disconnect_sensors():
 
         libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
 
-
         # 2) Stop gyro sampling
         libmetawear.mbl_mw_gyro_bmi270_stop(b)
    
-
         libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
   
         # 3) Unsubscribe from accel signal
@@ -333,7 +409,6 @@ def disconnect_sensors():
 
         libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
      
-
         # 4) Unsubscribe from gyro signal
         gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
     
@@ -434,6 +509,11 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []  
+    if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
+        or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
+        or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
+        print("delayed:(")
+        time.sleep(0.003)  
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
@@ -457,16 +537,12 @@ def CombineData():
                 _, gx1, gy1, gz1 = st.gyro_deque.popleft()
         else:
             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
-            print("Pop Here --++_+___+_+_++_+_+")
-            print(f"{gx1, gy1, gz1}")
-
         # append both accel + both gyro
         data += [
             ax1, ay1, az1,
             gx1, gy1, gz1
         ]
-
-    buffer.append(data)
+    buffer.append(data)  
     return data
 
 def get_prediction(model):
@@ -521,7 +597,7 @@ if __name__ == '__main__':
     data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
     data_writer = csv.writer(data_file)
     # Build combined‐data headers from your sensor lists:
-    data_headers = []
+    data_headers = ['host_time']
     for name,_ in QuaternionSensors:
         data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
     for name,_ in NormalSensors:
@@ -549,7 +625,10 @@ if __name__ == '__main__':
                 time.sleep(sleep_for)
             
             data = CombineData()
-            data_writer.writerow(data)
+            host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+            
+            row = [host_time] + data[:30]
+            data_writer.writerow(row)
             combinecounter+=1
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:

@@ -12,6 +12,7 @@ sensor_cols = [c for c in df.columns if c.startswith('n')]
 for sensor in sensor_cols:
     # Boolean column: True if this row's sample == previous row's sample
     df[f'{sensor}_is_repeat'] = df[sensor].eq(df[sensor].shift())
+    # df[f'{sensor}_is_repeat'] = df[sensor].eq(400)
     # First row has no “previous”—mark it False
     df.loc[0, f'{sensor}_is_repeat'] = False
 
