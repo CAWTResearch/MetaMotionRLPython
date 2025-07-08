@@ -21,7 +21,6 @@ desired_cols = [
 
 
 
-
 df_n_chest_acc = pd.read_csv("acc_CE:5A:39:E6:8F:B3.csv")
 df_n_chest_gyro = pd.read_csv("gyro_CE:5A:39:E6:8F:B3.csv")
 
@@ -54,6 +53,23 @@ df_q_right_knee = df_q_right_knee.sort_values(by='host_time')
 #---------------------------------------------------------------------
 # Sincronizar los datos usando merge_asof()
 
+all_dfs = [
+    df_n_chest_acc, df_n_chest_gyro,
+    df_n_left_knee_acc, df_n_left_knee_gyro,
+    df_n_right_hand_acc, df_n_right_hand_gyro,
+    df_q_chest, df_q_left_hand, df_q_right_knee
+]
+
+for df in all_dfs:
+    # parse “HH:MM:SS.ffffff” into a true Timestamp (today’s date + that time)
+    df['host_time'] = pd.to_datetime(df['host_time'],
+                                     format='%H:%M:%S.%f',
+                                     errors='coerce')
+    # drop any rows that failed to parse
+    df.dropna(subset=['host_time'], inplace=True)
+    # sort by the new datetime
+    df.sort_values('host_time', inplace=True)
+
 
 
 df_sync = pd.merge_asof(df_n_chest_acc, df_n_chest_gyro, on='host_time')
@@ -68,7 +84,6 @@ df_sync = pd.merge_asof(df_sync, df_q_right_knee, on='host_time')
 
 # Guardar el resultado en un nuevo archivo CSV
 
-df_sync = df_sync[desired_cols]
 df_sync.to_csv("Synchronized_Sensor_Data.csv", index=False)
 
 # Mostrar las primeras filas del dataset sincronizado
