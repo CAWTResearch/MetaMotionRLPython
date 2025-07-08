@@ -72,14 +72,20 @@ for df in all_dfs:
 
 
 
-df_sync = pd.merge_asof(df_n_chest_acc, df_n_chest_gyro, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_n_left_knee_acc, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_n_left_knee_gyro, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_n_right_hand_acc, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_n_right_hand_gyro, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_q_chest, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_q_left_hand, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_q_right_knee, on='host_time')
+df_chest_n = pd.merge_asof(df_n_chest_acc, df_n_chest_gyro, on='host_time')
+
+df_left_knee_n = pd.merge_asof(df_n_left_knee_acc, df_n_left_knee_gyro, on='host_time')
+
+df_right_hand_n = pd.merge_asof(df_n_right_hand_acc, df_n_right_hand_gyro, on='host_time')
+
+
+df_chest = pd.merge_asof(df_q_chest, df_chest_n, on='host_time')
+df_left = pd.merge_asof(df_q_left_hand, df_left_knee_n, on='host_time')
+df_right = pd.merge_asof(df_q_right_knee, df_right_hand_n, on='host_time')
+
+
+df_sync = pd.merge_asof(df_chest, df_left, on='host_time')
+df_sync = pd.merge_asof(df_sync, df_right, on='host_time')
 
 
 # Guardar el resultado en un nuevo archivo CSV
