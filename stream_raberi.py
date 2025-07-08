@@ -20,7 +20,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0']
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF']
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
 states = []
