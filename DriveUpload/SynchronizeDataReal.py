@@ -21,19 +21,19 @@ desired_cols = [
 
 
 
-df_n_chest_acc = pd.read_csv("acc_CE:5A:39:E6:8F:B3.csv")
-df_n_chest_gyro = pd.read_csv("gyro_CE:5A:39:E6:8F:B3.csv")
+df_n_chest_acc = pd.read_csv("DriveUpload/acc_CE:5A:39:E6:8F:B3.csv")
+df_n_chest_gyro = pd.read_csv("DriveUpload/gyro_CE:5A:39:E6:8F:B3.csv")
 
-df_n_left_knee_acc = pd.read_csv("acc_F4:73:A1:AB:BB:64.csv")
-df_n_left_knee_gyro = pd.read_csv("gyro_F4:73:A1:AB:BB:64.csv")
+df_n_left_knee_acc = pd.read_csv("DriveUpload/acc_F4:73:A1:AB:BB:64.csv")
+df_n_left_knee_gyro = pd.read_csv("DriveUpload/gyro_F4:73:A1:AB:BB:64.csv")
 
-df_n_right_hand_acc = pd.read_csv("acc_F7:68:55:8D:84:0E.csv")
-df_n_right_hand_gyro = pd.read_csv("gyro_F7:68:55:8D:84:0E.csv")
+df_n_right_hand_acc = pd.read_csv("DriveUpload/acc_F7:68:55:8D:84:0E.csv")
+df_n_right_hand_gyro = pd.read_csv("DriveUpload/gyro_F7:68:55:8D:84:0E.csv")
 
 
-df_q_chest = pd.read_csv("quat_F8:DC:C7:F1:48:7A.csv")
-df_q_left_hand = pd.read_csv("quat_E6:4F:B9:D7:18:7C.csv")
-df_q_right_knee = pd.read_csv("quat_F0:3D:E7:ED:F6:F7.csv")
+df_q_chest = pd.read_csv("DriveUpload/quat_F8:DC:C7:F1:48:7A.csv")
+df_q_left_hand = pd.read_csv("DriveUpload/quat_E6:4F:B9:D7:18:7C.csv")
+df_q_right_knee = pd.read_csv("DriveUpload/quat_F0:3D:E7:ED:F6:F7.csv")
 
 
 #---------------------------------------------------------------------
@@ -53,39 +53,28 @@ df_q_right_knee = df_q_right_knee.sort_values(by='host_time')
 #---------------------------------------------------------------------
 # Sincronizar los datos usando merge_asof()
 
-all_dfs = [
-    df_n_chest_acc, df_n_chest_gyro,
-    df_n_left_knee_acc, df_n_left_knee_gyro,
-    df_n_right_hand_acc, df_n_right_hand_gyro,
-    df_q_chest, df_q_left_hand, df_q_right_knee
-]
+df_chest_n = pd.merge_asof(df_n_chest_acc, df_n_chest_gyro, on='host_time',direction='nearest',
+                       tolerance=0.01)
 
-for df in all_dfs:
-    # parse “HH:MM:SS.ffffff” into a true Timestamp (today’s date + that time)
-    df['host_time'] = pd.to_datetime(df['host_time'],
-                                     format='%H:%M:%S.%f',
-                                     errors='coerce')
-    # drop any rows that failed to parse
-    df.dropna(subset=['host_time'], inplace=True)
-    # sort by the new datetime
-    df.sort_values('host_time', inplace=True)
+df_left_knee_n = pd.merge_asof(df_n_left_knee_acc, df_n_left_knee_gyro, on='host_time', direction='nearest',
+                       tolerance=0.01)
 
+df_right_hand_n = pd.merge_asof(df_n_right_hand_acc, df_n_right_hand_gyro, on='host_time', direction='nearest',
+                       tolerance=0.01)
 
+df_normal = pd.merge_asof(df_chest_n, df_left_knee_n, on = 'host_time', direction='nearest',
+                       tolerance=0.01)
+df_normal = pd.merge_asof(df_normal, df_right_hand_n, on = 'host_time', direction='nearest',
+                       tolerance=0.01)
 
-df_chest_n = pd.merge_asof(df_n_chest_acc, df_n_chest_gyro, on='host_time')
+df_quat = pd.merge_asof(df_q_chest, df_q_left_hand, on='host_time', direction='nearest',
+                       tolerance=0.01)
+df_quat = pd.merge_asof(df_quat, df_q_right_knee, on = 'host_time', direction='nearest',
+                       tolerance=0.01)
 
-df_left_knee_n = pd.merge_asof(df_n_left_knee_acc, df_n_left_knee_gyro, on='host_time')
+df_sync = pd.merge_asof(df_normal, df_quat, on = 'host_time', direction='nearest',
+                       tolerance=0.01)
 
-df_right_hand_n = pd.merge_asof(df_n_right_hand_acc, df_n_right_hand_gyro, on='host_time')
-
-
-df_chest = pd.merge_asof(df_q_chest, df_chest_n, on='host_time')
-df_left = pd.merge_asof(df_q_left_hand, df_left_knee_n, on='host_time')
-df_right = pd.merge_asof(df_q_right_knee, df_right_hand_n, on='host_time')
-
-
-df_sync = pd.merge_asof(df_chest, df_left, on='host_time')
-df_sync = pd.merge_asof(df_sync, df_right, on='host_time')
 
 
 # Guardar el resultado en un nuevo archivo CSV

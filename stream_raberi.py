@@ -20,7 +20,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', '3C:0A:F3:10:17:F0'
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF'
 ]
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
@@ -120,37 +120,37 @@ class State:
     
     def quaternion_handler(self, ctx, data_ptr):
 
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        host_time = datetime.datetime.now().timestamp()
         val = parse_value(data_ptr)
         self.quat_deque.append(( val.w, val.x, val.y, val.z))
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
-        self._quat_writer.writerow([host_time, val.w, val.x, val.y, val.z])
-        self._quat_fh.flush()
+        # self._quat_writer.writerow([host_time, val.w, val.x, val.y, val.z])
+        # self._quat_fh.flush()
         self.quat_count += 1
 
     def acc_data_handler(self, ctx, data_ptr):
 
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        host_time = datetime.datetime.now().timestamp()
         # 3) parse x,y,z
         val = parse_value(data_ptr)
         self.acc_deque.append((val.x, val.y, val.z))
         self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
 
-        self._acc_writer.writerow([host_time, val.x, val.y, val.z])
-        self._acc_fh.flush()
+        # self._acc_writer.writerow([host_time, val.x, val.y, val.z])
+        # self._acc_fh.flush()
         self.acc_count += 1
 
 
     def gyro_data_handler(self, ctx, data_ptr):
 
-        host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+        host_time = datetime.datetime.now().timestamp()
         val = parse_value(data_ptr)
         self.gyro_deque.append((val.x, val.y, val.z))
         self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
 
-        self._gyro_writer.writerow([host_time, val.x, val.y, val.z])
-        self._gyro_fh.flush()
+        # self._gyro_writer.writerow([host_time, val.x, val.y, val.z])
+        # self._gyro_fh.flush()
         self.gyro_count += 1
 
 
@@ -307,18 +307,18 @@ def configureNormal(states, N_Quantaty):
             profiles[i]["timeout"]
         )
         time.sleep(1.5)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
         time.sleep(1.5)
 
         # ACC: set ODR and range
         libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
-        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
+        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
  
 
         # GYRO: set ODR and range
         libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._500dps)
+        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
         libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
         NormalSensors.append((Sensor_Names[i],st))
@@ -488,11 +488,11 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []  
-    if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
-        or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
-        or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
-        print("delayed:(")
-        time.sleep(0.009)  
+    # if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
+    #     or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
+    #     or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
+    #     # print("delayed:(")
+    #     time.sleep(0.009)  
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
@@ -603,7 +603,7 @@ if __name__ == '__main__':
                 time.sleep(sleep_for)
             
             data = CombineData()
-            host_time = datetime.datetime.now().strftime('%H:%M:%S.%f')
+            host_time = datetime.datetime.now().timestamp()
             
             row = [host_time] + data[:30]
             data_writer.writerow(row)
