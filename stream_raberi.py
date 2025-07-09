@@ -487,12 +487,7 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 def CombineData():
-    data = []  
-    # if any(len(st.quat_deque)==0 for _,st in QuaternionSensors) \
-    #     or any(len(st.acc_deque)==0  for _,st in NormalSensors) \
-    #     or any(len(st.gyro_deque)==0 for _,st in NormalSensors):
-    #     # print("delayed:(")
-    #     time.sleep(0.009)  
+    data = []   
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
