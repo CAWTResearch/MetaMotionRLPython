@@ -111,11 +111,11 @@ class State:
         self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         
         # Prepare callback wrappers
-        self.acc_deque = deque(maxlen=3)
+        self.acc_deque = deque(maxlen=1)
         self.acc_cb   = FnVoid_VoidP_DataP(self.acc_data_handler)
-        self.gyro_deque= deque(maxlen=3)
+        self.gyro_deque= deque(maxlen=1)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
-        self.quat_deque = deque(maxlen=3)
+        self.quat_deque = deque(maxlen=1)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
     
     def quaternion_handler(self, ctx, data_ptr):
