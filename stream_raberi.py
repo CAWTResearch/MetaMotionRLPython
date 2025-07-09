@@ -34,6 +34,7 @@ cnn_out_channels=256
 lstm_hidden=256
 lstm_layers=2 
 output_dim=6
+STREAM_DURATION = 5
 
 QuaternionSensors = []
 NormalSensors = []
@@ -608,7 +609,12 @@ if __name__ == '__main__':
                 combinecounter =1
                 predicted_event.clear()
                 print(f"{elapsedtime}")
-        
+            elapsedtime= time.time()-start_ts
+            if elapsedtime >= STREAM_DURATION:
+                print(f"\n{STREAM_DURATION} seconds elapsed. Stopping streaming…")
+                break
+            time.sleep(0.1)
+            print(f"{elapsedtime}")
     except KeyboardInterrupt:
         # If user presses Ctrl+C during the timer, on_exit will run
         pass
