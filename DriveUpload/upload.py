@@ -6,17 +6,17 @@ import sys
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
 SERVICE_ACCOUNT_FILE = 'service_account.json'
-PARENT_FOLDER_ID = "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
 
-# 1) Compute the absolute path one level up (MetaMotionRLPython)
-parent = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
-# 2) Insert it at the front of sys.path so Python can find AccurateStreaming.py
-if parent not in sys.path:
-    sys.path.insert(0, parent)
+ParentFolder = "RealTimeTesting Predictions"
 
-# 3) Now do a normal (absolute) import
-from AccurateStreaming import device_macs, dongle_macs
+folders_ID = {"Yahid": "1BVlVORstArc-x2uptACGK1vqFcks5SCW", 
+              "Angel": "18KIELRL5BBtaBpIirm9wc1DhOnkM3W8B",
+              "RealTimeTesting Predictions": "1gkEMBR54HxqMs806p1jvURIYh7wUjzwj",
+              "CAWT_DATA": "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
+              }
+
+PARENT_FOLDER_ID = folders_ID[ParentFolder]
 
 def authenticate():
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -31,9 +31,11 @@ def create_subfolder(service, name, parent_id):
     folder = service.files().create(body=file_metadata, fields='id').execute()
     return folder.get('id')
 
-def upload_photo(service, file_path, folder_id):
+def upload_file(service, file_path, folder_id):
+    name = input("Enter the name for the file: ")
+
     file_metadata = {
-        'name': os.path.basename(file_path),
+        'name': name,
         'parents': [folder_id]
     }
 
@@ -42,25 +44,25 @@ def upload_photo(service, file_path, folder_id):
         media_body=file_path
     ).execute()
 
-def print_devices():
-    print("Sensors:", device_macs)
-    print("Dongles:", dongle_macs)
 
 def upload_all_files():
     creds = authenticate()
     service = build('drive', 'v3', credentials=creds)
 
     # Create a subfolder with a timestamp or custom name
-    import datetime
-    subfolder_name = "Upload_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
+    subfolder_name = input("Enter the name for the subfolder: ")
+
+    if not subfolder_name in folders_ID:
+        subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
+        folders_ID[subfolder_name] = subfolder_id
+    
+
+    subfolder_id = folders_ID[subfolder_name]
 
     # Upload files to the new subfolder
-    upload_photo(service, 'combined_data.csv', subfolder_id)
-    upload_photo(service, 'predictions.csv', subfolder_id)
+    upload_file(service, 'predictions.csv', subfolder_id)
 
 if __name__ == "__main__":
-    print_devices()
     upload_all_files()
     print("Files uploaded successfully.")
     print("See Google Drive for the uploaded files.")
