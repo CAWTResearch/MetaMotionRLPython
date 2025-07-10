@@ -111,11 +111,11 @@ class State:
         self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         
         # Prepare callback wrappers
-        self.acc_deque = deque(maxlen=2)
+        self.acc_deque = deque(maxlen=1)
         self.acc_cb   = FnVoid_VoidP_DataP(self.acc_data_handler)
-        self.gyro_deque= deque(maxlen=2)
+        self.gyro_deque= deque(maxlen=1)
         self.gyro_cb = FnVoid_VoidP_DataP(self.gyro_data_handler)
-        self.quat_deque = deque(maxlen=2)
+        self.quat_deque = deque(maxlen=1)
         self.quaternion_cb = FnVoid_VoidP_DataP(self.quaternion_handler)
     
     def quaternion_handler(self, ctx, data_ptr):
@@ -274,7 +274,6 @@ def configureNormal(states, N_Quantaty):
 
     i = 0
     for st in states[0:N_Quantaty]:
-        print(str(len(states[0:N_Quantaty])))
         b = st.device.board
         print("Configuring device Normal " + st.device.address + " Type   :   " + Sensor_Names[i])
         # Base folder for final CSVs; ensure it exists
@@ -516,15 +515,16 @@ def CombineData():
             gx1, gy1, gz1
         ]
     buffer.append(data)  
-    return data
+    # return data
+    return
 
 def get_prediction(model):
-    prev_time = time.time()
+    # prev_time = time.time()
     while True:
         if (len(buffer)>=50 and combinecounter>=25):
             predicted_event.set()
             print(combinecounter)
-            start_time = time.time()
+            # start_time = time.time()
             data_tensor = preprocess_data(buffer, scaler)
 
             with torch.no_grad():
@@ -532,21 +532,21 @@ def get_prediction(model):
                 probabilities = torch.softmax(output, dim=1).squeeze().tolist()
                 prediction = int(torch.argmax(output, dim=1).item())
 
-            end_time = time.time()
-            DeltaT = end_time - prev_time
-            latency = (end_time - start_time)
+            # end_time = time.time()
+            # DeltaT = end_time - prev_time
+            # latency = (end_time - start_time)
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
-            print(f"[inference] Latency: {latency:.4f}s")
+            # print(f"[inference] Latency: {latency:.4f}s")
 
-            print(f"[inference] DeltaT: {DeltaT:.4f}s")
+            # print(f"[inference] DeltaT: {DeltaT:.4f}s")
             timestamp = datetime.datetime.now().isoformat()
             pred_writer.writerow([timestamp, prediction, *probabilities])
             pred_file.flush()
 
-            prev_time = end_time 
-            time.sleep(0.1)
+            # prev_time = end_time 
+            # time.sleep(0.1)
 
 # Main loop
 if __name__ == '__main__':
@@ -597,11 +597,12 @@ if __name__ == '__main__':
             if sleep_for > 0:
                 time.sleep(sleep_for)
             
-            data = CombineData()
+            # data = CombineData()
+            CombineData()
             host_time = datetime.datetime.now().timestamp()
             
-            row = [host_time] + data[:30]
-            data_writer.writerow(row)
+            # row = [host_time] + data[:30]
+            # data_writer.writerow(row)
             combinecounter+=1
 
             if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
@@ -616,7 +617,7 @@ if __name__ == '__main__':
         # f) Timer done → clean up & dump
         disconnect_sensors()
         pred_file.close()
-        data_file.close()
+        # data_file.close()
 
         print("All done. Exiting.")
         sys.exit(0)
