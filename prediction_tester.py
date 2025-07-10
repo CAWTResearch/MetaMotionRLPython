@@ -94,7 +94,7 @@ def choose_csv():
         sys.exit(1)
     return csvs[0]
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     if len(sys.argv) == 2:
         path = sys.argv[1]
     elif len(sys.argv) == 1:
