@@ -1,19 +1,27 @@
-import asyncio
-import websockets
+import asyncio, websockets
 
-async def hello(websocket):
-    name = await websocket.recv()
-    print(f"Received name: {name}")
+async def hello(websocket, path):
+    print("Client connected")
+    try:
+        async for msg in websocket:
+            # e.g. respond to “get_info”
+            if msg == "get_info":
+                info = get_realtime_info()       # your custom function
+                await websocket.send(info)
+            else:
+                # fallback / logging
+                await websocket.send(f"Unknown command: {msg}")
+    except websockets.ConnectionClosed:
+        print("Client disconnected")
 
-    greeting = f"Hello, {name}!"
-    await websocket.send(greeting)
-    print(f"Sent greeting: {greeting}")
+def get_realtime_info():
+    # gather whatever you need here; stub:
+    return "Server time: " + asyncio.get_event_loop().time().__str__()
 
 async def main():
     async with websockets.serve(hello, "0.0.0.0", 8765):
-        print("Server started on ws://0.0.0.0:8765")
+        print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("WebSocket server is running.")
