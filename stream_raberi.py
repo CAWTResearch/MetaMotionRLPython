@@ -75,7 +75,7 @@ async def server(websocket):
 
 def get_realtime_info(prediction):
     # gather whatever you need here; stub:
-    return str(prediction)
+    return str(prediction[0])
 
 async def start():
     async with websockets.serve(server, "0.0.0.0", 8765):
