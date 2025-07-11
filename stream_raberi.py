@@ -595,16 +595,16 @@ if __name__ == '__main__':
     model.eval()
     print("Modeled again")
 
-    data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
-    data_writer = csv.writer(data_file)
-    # Build combined‐data headers from your sensor lists:
-    data_headers = ['host_time']
-    for name,_ in QuaternionSensors:
-        data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
-    for name,_ in NormalSensors:
-        data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
-        data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
-    data_writer.writerow(data_headers)
+    # data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
+    # data_writer = csv.writer(data_file)
+    # # Build combined‐data headers from your sensor lists:
+    # data_headers = ['host_time']
+    # for name,_ in QuaternionSensors:
+    #     data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
+    # for name,_ in NormalSensors:
+    #     data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
+    #     data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
+    # data_writer.writerow(data_headers)
 
     def start_ws():
         asyncio.run(start())
