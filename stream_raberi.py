@@ -579,7 +579,6 @@ def get_prediction(model):
 
 # Main loop
 if __name__ == '__main__':
-    asyncio.run(start())
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
@@ -606,6 +605,12 @@ if __name__ == '__main__':
         data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
         data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
     data_writer.writerow(data_headers)
+
+    def start_ws():
+        asyncio.run(start())
+    ws_thread = Thread(target=start_ws, daemon=True)
+    ws_thread.start()
+    print("WebSocket server running in background.")
 
     try:
         print("tried")
