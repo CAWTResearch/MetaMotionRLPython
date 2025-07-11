@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from threading import Thread, Event
-
+import asyncio, websockets
 import joblib, csv
 import numpy as np
 
@@ -38,7 +38,7 @@ output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
-
+CurrentPrediction = []
 
 profiles = [
     {"interval":8.75, "latency":0, "timeout":10000},
@@ -57,6 +57,31 @@ pred_writer.writerow([
     'prediction',
     *[f'prob_{i}' for i in range(output_dim)]
 ])
+
+async def server(websocket):
+    print("Client connected")
+    try:
+        async for msg in websocket:
+            # e.g. respond to “get_info”
+            if msg == "get_info":
+                info = get_realtime_info(CurrentPrediction)       # your custom function
+                await websocket.send(info)
+            else:
+                # fallback / logging
+                await websocket.send(f"Unknown command: {msg}")
+    except websockets.ConnectionClosed:
+        print("Client disconnected")
+
+
+def get_realtime_info(prediction):
+    # gather whatever you need here; stub:
+    return str(prediction)
+
+async def start():
+    async with websockets.serve(server, "0.0.0.0", 8765):
+        print("Server listening on 0.0.0.0:8765")
+        await asyncio.Future()  # run forever
+
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -547,12 +572,14 @@ def get_prediction(model):
             pred_writer.writerow([timestamp, prediction, *probabilities])
             pred_file.flush()
 
+            CurrentPrediction[0] = prediction
+
             # prev_time = end_time 
             # time.sleep(0.1)
 
 # Main loop
 if __name__ == '__main__':
-
+    asyncio.run(start())
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)

@@ -1,6 +1,6 @@
 import asyncio, websockets
 
-async def hello(websocket):
+async def server(websocket):
     print("Client connected")
     try:
         async for msg in websocket:
@@ -19,10 +19,10 @@ def get_realtime_info():
     # gather whatever you need here; stub:
     return "0"
 
-async def main():
-    async with websockets.serve(hello, "0.0.0.0", 8765):
+async def start():
+    async with websockets.serve(server, "0.0.0.0", 8765):
         print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(start())
