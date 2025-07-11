@@ -17,7 +17,7 @@ async def hello(websocket):
 
 def get_realtime_info():
     # gather whatever you need here; stub:
-    return 0
+    return "0"
 
 async def main():
     async with websockets.serve(hello, "0.0.0.0", 8765):
