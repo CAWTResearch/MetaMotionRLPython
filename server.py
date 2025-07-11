@@ -10,8 +10,8 @@ async def hello(websocket):
     print(f"Sent greeting: {greeting}")
 
 async def main():
-    async with websockets.serve(hello, "localhost", 8765):
-        print("Server started on ws://localhost:8765")
+    async with websockets.serve(hello, "0.0.0.0", 8765):
+        print("Server started on ws://0.0.0.0:8765")
         await asyncio.Future()  # run forever
 
 if __name__ == "__main__":
