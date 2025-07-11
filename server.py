@@ -14,9 +14,10 @@ async def hello(websocket):
     except websockets.ConnectionClosed:
         print("Client disconnected")
 
+
 def get_realtime_info():
     # gather whatever you need here; stub:
-    return "Server time: " + asyncio.get_event_loop().time().__str__()
+    return "walking"
 
 async def main():
     async with websockets.serve(hello, "0.0.0.0", 8765):
