@@ -38,6 +38,8 @@ output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
+
+
 profiles = [
     {"interval":8.75, "latency":0, "timeout":10000},
     {"interval":10.0, "latency":0, "timeout":10000},

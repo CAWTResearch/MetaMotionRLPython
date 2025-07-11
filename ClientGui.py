@@ -13,6 +13,9 @@ REQUEST_INTERVAL = 0.5  # seconds between requests
 
 # Movement categories and associated image files
 CATEGORIES = ["sitting down", "folding clothes", "sweeping", "walking", "moving boxes", "running bicycle"]
+
+PredictionsMap = {0:"sitting down", 1:"folding clothes", 2:"sweeping", 3:"walking", 4:"moving boxes", 5:"running bicycle"}
+
 IMAGE_PATHS = {cat: f"images/{cat.replace(' ', '_')}.png" for cat in CATEGORIES}
 
 class WSClient:
@@ -87,6 +90,8 @@ class App(tk.Tk):
         # Update status
         if self.status['text'] != 'Connected':
             self.status.config(text='Connected')
+        
+        msg = PredictionsMap[msg]
 
         # If msg is a known category, update chart and image
         if msg in CATEGORIES:
