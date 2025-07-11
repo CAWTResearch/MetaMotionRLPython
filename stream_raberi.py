@@ -38,7 +38,7 @@ output_dim=6
 QuaternionSensors = []
 NormalSensors = []
 
-CurrentPrediction = []
+CurrentPrediction = [0]
 
 profiles = [
     {"interval":8.75, "latency":0, "timeout":10000},
