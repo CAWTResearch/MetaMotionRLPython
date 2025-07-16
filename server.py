@@ -5,7 +5,7 @@ async def server(websocket):
     try:
         async for msg in websocket:
             # e.g. respond to “get_info”
-            if msg == "get_info" or msg == """ "get_info" """:
+            if msg == "get_info" or msg == '"get_info"':
                 info = get_realtime_info()       # your custom function
                 await websocket.send(info)
             else:
