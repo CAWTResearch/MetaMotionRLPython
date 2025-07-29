@@ -17,6 +17,7 @@ async def server(websocket):
 
 def get_realtime_info():
     # gather whatever you need here; stub:
+    print("Gathering realtime info...")
     return "0"
 
 async def start():
