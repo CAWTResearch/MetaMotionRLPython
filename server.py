@@ -9,10 +9,20 @@ async def server(websocket):
                 info = get_realtime_info()       # your custom function
                 await websocket.send(info)
             else:
-                # fallback / logging
-                await websocket.send(f"Unknown command: {msg}")
+                mode_value = mode(msg)
+                await websocket.send(mode_value)
     except websockets.ConnectionClosed:
         print("Client disconnected")
+
+def mode(message):
+    modes = {"set_mode:Standby": 0,
+             "set_mode:Measurement": 1, "set_mode:Calibration": 2, "set_mode:Diagnostics": 3}
+    if not message in modes:
+        return -1
+
+    return modes[message]
+
+
 
 
 def get_realtime_info():
