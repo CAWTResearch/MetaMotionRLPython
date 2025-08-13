@@ -28,7 +28,7 @@ def mode(message):
 def get_realtime_info():
     # gather whatever you need here; stub:
     print("Gathering realtime info...")
-    return "0"
+    return "1"
 
 async def start():
     async with websockets.serve(server, "0.0.0.0", 8765):
