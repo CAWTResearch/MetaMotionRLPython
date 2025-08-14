@@ -5,20 +5,19 @@ async def server(websocket):
     try:
         async for msg in websocket:
             # e.g. respond to “get_info”
+            print(f"Received message: {msg}")
             if msg == "get_info" or msg == '"get_info"':
                 info = get_realtime_info()       # your custom function
                 await websocket.send(info)
-            else:
-                mode_value = mode(msg)
-                await websocket.send(mode_value)
+
     except websockets.ConnectionClosed:
         print("Client disconnected")
 
 def mode(message):
-    modes = {"set_mode:Standby": 0,
-             "set_mode:Measurement": 1, "set_mode:Calibration": 2, "set_mode:Diagnostics": 3}
+    modes = {"Standby": 0,
+             "Measurement": 1, "Calibration": 2, "Diagnostics": 3}
     if not message in modes:
-        return -1
+        return 0
 
     return modes[message]
 
