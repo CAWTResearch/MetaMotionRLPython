@@ -15,8 +15,8 @@ async def server(websocket):
         print("Client disconnected")
 
 def mode(message):
-    modes = {"Standby": 0,
-             "Measurement": 1, "Calibration": 2, "Diagnostics": 3}
+    modes = {'"Standby"': 0,
+             '"Measurement"': 1, '"Calibration"': 2, '"Diagnostics"': 3}
     if not message in modes:
         return str(-1)
 
