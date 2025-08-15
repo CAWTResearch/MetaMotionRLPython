@@ -170,6 +170,7 @@ def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, List[Tuple[str, str]
     normals = [(pos, mac) for (pos, mac) in selected if ROLE_BY_POSITION.get(pos) == 'normal']
     quats   = [(pos, mac) for (pos, mac) in selected if ROLE_BY_POSITION.get(pos) == 'quat']
     device_macs = [mac for (_, mac) in normals] + [mac for (_, mac) in quats]
+    print(device_macs)
     return {"normals": normals, "quats": quats, "device_macs": device_macs}
 
 def preprocess_data(buffer, scaler):
