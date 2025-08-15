@@ -15,7 +15,7 @@ from threading import Thread, Event, Lock
 import asyncio, websockets
 import joblib, csv
 import numpy as np
-import json, logging
+import json
 from typing import Dict, List, Tuple
 
 states: List["State"] = []
@@ -626,66 +626,57 @@ def get_prediction(model):
             time.sleep(0.002)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", force=True)
+    print("Starting server...")
+    # Load model & scaler up front
+    model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels,
+                            lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
+    scaler = joblib.load("scaler_model_full_model.pkl")
+    model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
+    model.eval()
+    print("Model & scaler loaded")
+
+    # Start WS server
+    Thread(target=lambda: asyncio.run(start_ws_server()), daemon=True).start()
+    print("WebSocket server running in background.")
 
     try:
-        # 1) Start WS server FIRST so you always see it even if ML fails
-        Thread(target=lambda: asyncio.run(start_ws_server()), daemon=True).start()
-        logging.info("WebSocket server thread started.")
-
-        # 2) Try to load model/scaler (don't crash if missing or bad path)
-        model = None
-        try:
-            model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels,
-                                    lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
-            scaler = joblib.load("scaler_model_full_model.pkl")
-            model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
-            model.eval()
-            logging.info("Model & scaler loaded")
-        except Exception:
-            logging.exception("Model/scaler load failed; continuing without predictions")
-            scaler = None
-            model = None
-
-        # 3) Start prediction loop only if model/scaler available
-        if model is not None and scaler is not None:
-            Thread(target=get_prediction, args=(model,), daemon=True).start()
-
-        # 4) Main 50 Hz loop — keeps process alive
+        print("tried")
         target_dt = 1.0 / 50
+
+        t1 = Thread(target=get_prediction, args=(model,), daemon=True)
+        t1.start()
+
         start_ts = time.perf_counter()
         screen_limit = 25
-        count = 0
-
+        count =0
         while True:
             if not streaming_event.is_set():
                 time.sleep(0.01)
                 start_ts = time.perf_counter()
                 count = 0
                 continue
-
-            count += 1
-            elapsedtime = time.perf_counter() - start_ts
+            count +=1
+            elapsedtime= time.perf_counter()-start_ts
+            loop_start = time.perf_counter()
             next_call = start_ts + count * target_dt
             sleep_for = next_call - time.perf_counter()
             if sleep_for > 0:
                 time.sleep(sleep_for)
-
+            
             CombineData()
-            # combinecounter is a module-level var; we can increment it here
-            combinecounter += 1
+            combinecounter+=1
 
-            if combinecounter > screen_limit and predicted_event.is_set() and len(buffer) >= 50:
-                combinecounter = 1
+            if combinecounter> screen_limit and predicted_event.is_set() and len(buffer)>=50:
+                combinecounter =1
                 predicted_event.clear()
-                logging.info(f"{elapsedtime:.3f}")
-
+                print(f"{elapsedtime}")
+        
     except KeyboardInterrupt:
+        # If user presses Ctrl+C during the timer, on_exit will run
         pass
-    except Exception:
-        logging.exception("Fatal error in main()")
     finally:
         streaming_event.clear()
         stop_subscriptions()
         disconnect_sensors()
-        logging.info("All done. Exiting.")
+        print("All done. Exiting.")
+        sys.exit(0)
