@@ -67,29 +67,50 @@ profiles = [
     {"interval":7.5, "latency":0, "timeout":10000},
 ]
 
+def try_parse_json(raw: str):
+
+    if not isinstance(raw, str):
+        return None
+    # First attempt: raw as JSON
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        obj = None
+
+    # If obj is a string (e.g., a JSON blob inside quotes), try decoding again
+    if isinstance(obj, str):
+        try:
+            obj2 = json.loads(obj)
+            obj = obj2
+        except Exception:
+            pass
+
+    return obj if isinstance(obj, dict) else None
+
+
 async def server(ws):
-    print("Client connected")
+    print("Client connected", flush=True)
     try:
         async for raw in ws:
-            msg = raw
-            payload = None
-            if isinstance(raw, str) and raw and raw[0] == '{':
-                try:
-                    payload = json.loads(raw)
-                except Exception:
-                    payload = None
+            print(f"[WS] raw={raw[:120]}...", flush=True)  # trim for sanity
+            payload = try_parse_json(raw)
 
-            if msg in ("get_info", '"get_info"'):
+            # info ping
+            if raw in ("get_info", '"get_info"'):
+                print("[WS] get_info", flush=True)
                 await ws.send(get_realtime_info())
-
-            elif payload and isinstance(payload, dict) and (
+                continue
+            
+            if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
             ):
                 mapping = payload.get("mapping") if payload.get("action") == "set_mapping" else payload
                 mapping = mapping or {}
 
+                print(f"[MAP] received keys={list(mapping.keys())}", flush=True)
                 plan = plan_from_mapping(mapping)
                 normals = plan["normals"]; quats = plan["quats"]; macs = plan["device_macs"]
+                print(f"[MAP] normals={len(normals)} quats={len(quats)} macs={len(macs)}", flush=True)
 
                 if len(macs) == 0:
                     await ws.send('"MAPPING_EMPTY"')
@@ -176,6 +197,7 @@ def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
       "device_macs": ["CE:...", "F7:...", ...]   # (order does not matter)
     }
     """
+    print("Received mapping!", flush=True)
     selected: List[Tuple[str, str]] = []
     seen: Set[str] = set()
 
@@ -423,6 +445,7 @@ def configure_sensors(states_list: List["State"],
     quats/normals are [ (position, mac), ... ] from plan_from_mapping().
     We configure each connected state by checking its MAC membership.
     """
+    print("Configuring Sensors!")
     quat_map   = {normalize_mac(mac): pos for (pos, mac) in quats}
     normal_map = {normalize_mac(mac): pos for (pos, mac) in normals}
 
