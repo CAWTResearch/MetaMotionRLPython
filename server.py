@@ -142,7 +142,7 @@ async def server(ws):
 
                 await ws.send('"MAPPING_APPLIED"')
 
-            elif msg in ('"start_stream"', '"Measurement"'):
+            elif raw in ('"start_stream"', '"Measurement"'):
                 if not configured_event.is_set():
                     await ws.send("NOT_CONFIGURED")
                     continue
@@ -154,14 +154,14 @@ async def server(ws):
                     streaming_event.set()
                 await ws.send('"STREAMING_STARTED"')
 
-            elif msg in ('"stop_stream"', '"Standby"'):
+            elif raw in ('"stop_stream"', '"Standby"'):
                 with config_lock:
                     streaming_event.clear()
                     stop_subscriptions()
                 await ws.send('"STREAMING_STOPPED"')
 
             else:
-                await ws.send(mode(msg))
+                await ws.send(mode(raw))
     except websockets.ConnectionClosed:
         print("Client disconnected")
 
