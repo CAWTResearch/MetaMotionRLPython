@@ -16,7 +16,7 @@ import asyncio, websockets
 import joblib, csv
 import numpy as np
 import json
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set, Any
 
 states: List["State"] = []
 NormalSensors: List[Tuple[str, "State"]] = []
@@ -82,16 +82,19 @@ async def server(ws):
             if msg in ("get_info", '"get_info"'):
                 await ws.send(get_realtime_info())
 
-            elif payload and payload.get("action") == "set_mapping":
-                mapping = payload.get("mapping") or {}
+            elif payload and isinstance(payload, dict) and (
+                payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
+            ):
+                mapping = payload.get("mapping") if payload.get("action") == "set_mapping" else payload
+                mapping = mapping or {}
+
                 plan = plan_from_mapping(mapping)
                 normals = plan["normals"]; quats = plan["quats"]; macs = plan["device_macs"]
 
                 if len(macs) == 0:
-                    await ws.send("MAPPING_EMPTY")
+                    await ws.send('"MAPPING_EMPTY"')
                     continue
 
-                # connect + configure, but DO NOT subscribe yet
                 with config_lock:
                     # clear any previous config
                     streaming_event.clear()
@@ -102,20 +105,23 @@ async def server(ws):
                     QuaternionSensors.clear()
                     states.clear()
 
-                    # use provided MACs
+                    # use provided MACs (order no longer matters)
                     deviceMacs[:] = macs
 
                     force_disconnect_sensors()
                     connect_sensors(deviceMacs, dongle_macs)
 
-                    if not states or len(states) != (len(normals)+len(quats)):
-                        await ws.send(f"CONNECT_RESULT: connected={len(states)}, expected={len(normals)+len(quats)}")
-                    configure_sensors(states, Int_Quaternions=len(quats), Int_Normals=len(normals))
+                    expected = len(normals) + len(quats)
+                    if not states or len(states) != expected:
+                        await ws.send(f"CONNECT_RESULT: connected={len(states)}, expected={expected}")
+
+                    # configure by MAC membership (correctly matches normal vs quat)
+                    configure_sensors(states, quats, normals)
                     configured_event.set()
 
-                await ws.send("MAPPING_APPLIED")
+                await ws.send('"MAPPING_APPLIED"')
 
-            elif msg in ("start_stream", "Measurement"):
+            elif msg in ('"start_stream"', '"Measurement"'):
                 if not configured_event.is_set():
                     await ws.send("NOT_CONFIGURED")
                     continue
@@ -125,13 +131,13 @@ async def server(ws):
                     combinecounter = 0
                     subscribe_sensors()
                     streaming_event.set()
-                await ws.send("STREAMING_STARTED")
+                await ws.send('"STREAMING_STARTED"')
 
-            elif msg in ("stop_stream", "Standby"):
+            elif msg in ('"stop_stream"', '"Standby"'):
                 with config_lock:
                     streaming_event.clear()
                     stop_subscriptions()
-                await ws.send("STREAMING_STOPPED")
+                await ws.send('"STREAMING_STOPPED"')
 
             else:
                 await ws.send(mode(msg))
@@ -156,24 +162,49 @@ async def start_ws_server():
         print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
 
-def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, List[Tuple[str, str]]]:
+POSITION_BY_MAC: Dict[str, str] = {}
+
+def normalize_mac(mac: str) -> str:
+    return (mac or "").strip().upper()
+
+def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Input:  {"Chest-left": "CE:...", "Chest-right": "...", ...}
+    Output: {
+      "normals":     [("Chest-left", "CE:..."), ...],
+      "quats":       [("Chest-right", "F7:..."), ...],
+      "device_macs": ["CE:...", "F7:...", ...]   # (order does not matter)
+    }
+    """
     selected: List[Tuple[str, str]] = []
-    seen = set()
+    seen: Set[str] = set()
+
     for pos in POSITIONS:
-        mac = (mapping.get(pos) or "").strip().upper()
+        mac = normalize_mac(mapping.get(pos, ""))
         if not mac:
             continue
         if mac in seen:
+            # skip duplicates quietly
             continue
         seen.add(mac)
         selected.append((pos, mac))
+
     normals = [(pos, mac) for (pos, mac) in selected if ROLE_BY_POSITION.get(pos) == 'normal']
     quats   = [(pos, mac) for (pos, mac) in selected if ROLE_BY_POSITION.get(pos) == 'quat']
-    device_macs = [mac for (_, mac) in normals] + [mac for (_, mac) in quats]
-    print(device_macs)
-    print(normals)
-    print(quats)
-    return {"normals": normals, "quats": quats, "device_macs": device_macs}
+
+    # Remember MAC -> position for naming/logging/config
+    POSITION_BY_MAC.clear()
+    for pos, mac in selected:
+        POSITION_BY_MAC[mac] = pos
+
+    device_macs = [mac for _, mac in selected]
+
+    return {
+        "normals": normals,
+        "quats":   quats,
+        "device_macs": device_macs,
+    }
+
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -342,61 +373,79 @@ def connect_sensors(devices, dongles, retries=10):
                     print(f"Conn err {mac}: {e}")
                     time.sleep(1)
     return states
-def configureNormal(states_list, N_Quantaty):
-    Sensor_Names = ["n_chest", "n_left_knee", "n_right_hand"]
-    for i, st in enumerate(states_list[0:N_Quantaty]):
-        b = st.device.board
-        name = Sensor_Names[i] if i < len(Sensor_Names) else f"n_{i}"
-        print(f"Configuring device Normal {st.device.address} Type: {name}")
+def configureNormal(st: "State", name: str):
+    b = st.device.board
+    print(f"Configuring device Normal {st.device.address} Type: {name}")
 
-        settings = st.profile
-        libmetawear.mbl_mw_settings_set_connection_parameters(
-            b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
-        )
-        time.sleep(1.0)
-        libmetawear.mbl_mw_settings_set_tx_power(b, 8)
-        time.sleep(0.5)
+    settings = st.profile
+    libmetawear.mbl_mw_settings_set_connection_parameters(
+        b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
+    )
+    time.sleep(1.0)
+    libmetawear.mbl_mw_settings_set_tx_power(b, 8)
+    time.sleep(0.5)
 
-        libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
-        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
-        libmetawear.mbl_mw_acc_write_acceleration_config(b)
+    libmetawear.mbl_mw_acc_bmi270_set_odr(b, AccBmi270Odr._100Hz)
+    libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
+    libmetawear.mbl_mw_acc_write_acceleration_config(b)
 
-        libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
-        libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
-        libmetawear.mbl_mw_gyro_bmi270_write_config(b)
+    libmetawear.mbl_mw_gyro_bmi270_set_odr(b, GyroBoschOdr._100Hz)
+    libmetawear.mbl_mw_gyro_bmi270_set_range(b, GyroBoschRange._2000dps)
+    libmetawear.mbl_mw_gyro_bmi270_write_config(b)
 
-        NormalSensors.append((name, st))
+    NormalSensors.append((name, st))
+    time.sleep(0.3)
 
-def configureQuaternions(states_list, Q_Quantaty):
-    Sensor_Names = ["q_chest", "q_left_hand", "q_right_knee"]
-    start = len(NormalSensors)
-    for j, st in enumerate(states_list[start : start + Q_Quantaty]):
-        d = st.device
-        name = Sensor_Names[j] if j < len(Sensor_Names) else f"q_{j}"
-        print(f"Configuring device Quaternion {d.address} Type: {name}")
+def configureQuaternions(st: "State", name: str):
+    d = st.device
+    print(f"Configuring device Quaternion {d.address} Type: {name}")
 
-        settings = st.profile
-        libmetawear.mbl_mw_settings_set_connection_parameters(
-            d.board, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
-        )
-        time.sleep(1.0)
-        libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
-        time.sleep(0.5)
+    settings = st.profile
+    libmetawear.mbl_mw_settings_set_connection_parameters(
+        d.board, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
+    )
+    time.sleep(1.0)
+    libmetawear.mbl_mw_settings_set_tx_power(d.board, 8)
+    time.sleep(0.5)
 
-        libmetawear.mbl_mw_sensor_fusion_set_mode(d.board, SensorFusionMode.IMU_PLUS)
-        libmetawear.mbl_mw_sensor_fusion_set_acc_range(d.board, SensorFusionAccRange._16G)
-        libmetawear.mbl_mw_sensor_fusion_set_gyro_range(d.board, SensorFusionGyroRange._2000DPS)
-        libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
+    libmetawear.mbl_mw_sensor_fusion_set_mode(d.board, SensorFusionMode.IMU_PLUS)
+    libmetawear.mbl_mw_sensor_fusion_set_acc_range(d.board, SensorFusionAccRange._16G)
+    libmetawear.mbl_mw_sensor_fusion_set_gyro_range(d.board, SensorFusionGyroRange._2000DPS)
+    libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
 
-        QuaternionSensors.append((name, st))
-        time.sleep(0.3)
+    QuaternionSensors.append((name, st))
+    time.sleep(0.3)
 
-def configure_sensors(states_list, Int_Quaternions, Int_Normals):
-    if Int_Quaternions + Int_Normals != len(states_list):
-        raise ValueError("Int_Quaternions + Int_Normals must equal number of connected states.")
-    print(f"{len(states_list)} states; configuring {Int_Normals} normals + {Int_Quaternions} quats")
-    configureNormal(states_list, Int_Normals)
-    configureQuaternions(states_list, Int_Quaternions)
+def configure_sensors(states_list: List["State"],
+                      quats: List[Tuple[str, str]],
+                      normals: List[Tuple[str, str]]):
+    """
+    quats/normals are [ (position, mac), ... ] from plan_from_mapping().
+    We configure each connected state by checking its MAC membership.
+    """
+    quat_map   = {normalize_mac(mac): pos for (pos, mac) in quats}
+    normal_map = {normalize_mac(mac): pos for (pos, mac) in normals}
+
+    cfg_normals = 0
+    cfg_quats   = 0
+
+    for st in states_list:
+        mac = normalize_mac(st.device.address)
+        if mac in normal_map:
+            pos = normal_map[mac]
+            name = f"n_{pos.replace('-', '_')}"
+            configureNormal(st, name)
+            cfg_normals += 1
+        elif mac in quat_map:
+            pos = quat_map[mac]
+            name = f"q_{pos.replace('-', '_')}"
+            configureQuaternions(st, name)
+            cfg_quats += 1
+        else:
+            print(f"Skipping {mac}: not present in mapping.")
+
+    print(f"{len(states_list)} states; configured {cfg_normals} normals + {cfg_quats} quats")
+
 
 
 def subscribe_sensors():
