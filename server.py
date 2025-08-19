@@ -139,39 +139,69 @@ async def server(ws):
                     # configure by MAC membership (correctly matches normal vs quat)
                     configure_sensors(states, quats, normals)
                     configured_event.set()
+                
+                    # --- mode as JSON: {"mode":"Measurement"} or {"action":"set_mode","mode":"Standby"} ---
+                    if payload and ("mode" in payload or payload.get("action") == "set_mode"):
+                        mode_value = payload.get("mode")
+                        if isinstance(mode_value, str):
+                            await handle_mode(ws, mode_value)
+                            continue
 
+                    # --- mode as a plain/quoted string token ---
+                    if isinstance(raw, str):
+                        candidate = normalize_mode(raw)
+                        if candidate in ('"Start Streaming"',
+                                        '"Standby"', '"Stop Streaming"', "None",
+                                        '"Calibration"', '"Diagnostics"'):
+                            await handle_mode(ws, candidate)
+                            continue
                 await ws.send('"MAPPING_APPLIED"')
 
-            elif raw in ('"start_stream"', '"Measurement"'):
-                if not configured_event.is_set():
-                    await ws.send("NOT_CONFIGURED")
-                    continue
-                with config_lock:
-                    buffer.clear()
-                    global combinecounter
-                    combinecounter = 0
-                    subscribe_sensors()
-                    streaming_event.set()
-                await ws.send('"STREAMING_STARTED"')
-
-            elif raw in ('"stop_stream"', '"Standby"'):
-                with config_lock:
-                    streaming_event.clear()
-                    stop_subscriptions()
-                await ws.send('"STREAMING_STOPPED"')
-
-            else:
-                await ws.send(mode(raw))
     except websockets.ConnectionClosed:
         print("Client disconnected")
 
 def mode(message):
     modes = {'"Standby"': 0,
-             '"Measurement"': 1, '"Calibration"': 2, '"Diagnostics"': 3}
+             '"Start Streaming"': 1, '"Calibration"': 2, '"Diagnostics"': 3}
     if not message in modes:
         return str(-1)
 
     return str(modes[message])
+
+async def handle_mode(ws, mode_value: str):
+    mode = normalize_mode(mode_value)
+    print(f"[MODE] selected={mode}", flush=True)
+
+    # Start streaming modes
+    if mode in ('"Start Streaming"'):
+        if streaming_event.is_set():
+            await ws.send("STREAMING_ALREADY_STARTED")
+            return
+        if start_streaming_now():
+            await ws.send("STREAMING_STARTED")
+        else:
+            await ws.send("NOT_CONFIGURED")
+        return
+
+    # Stop / standby
+    if mode in ('"Standby"', '"Stop Streaming"', '"None'):
+        if streaming_event.is_set():
+            stop_streaming_now()
+            await ws.send("STREAMING_STOPPED"), 
+        else:
+            await ws.send("STREAMING_ALREADY_STOPPED")
+        return
+
+    # Non-streaming modes you might use later
+    if mode in ("Calibration", "Diagnostics"):
+        # Usually you want streams OFF for these
+        if streaming_event.is_set():
+            stop_streaming_now()
+        await ws.send(f"MODE_SET:{mode}")
+        return
+
+    await ws.send("UNKNOWN_MODE")
+
 
 def get_realtime_info():
     # gather whatever you need here; stub:
@@ -227,6 +257,32 @@ def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
         "device_macs": device_macs,
     }
 
+def normalize_mode(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    return s.strip().strip('"')  # tolerate quoted tokens from client
+
+
+def start_streaming_now() -> bool:
+    if not configured_event.is_set():
+        print("[MODE] start requested but NOT_CONFIGURED", flush=True)
+        return False
+    with config_lock:
+        print("[MODE] starting streaming...", flush=True)
+        buffer.clear()
+        global combinecounter
+        combinecounter = 0
+        subscribe_sensors()
+        streaming_event.set()
+    return True
+
+
+def stop_streaming_now() -> bool:
+    with config_lock:
+        print("[MODE] stopping streaming...", flush=True)
+        streaming_event.clear()
+        stop_subscriptions()
+    return True
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
