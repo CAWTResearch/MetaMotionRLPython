@@ -53,7 +53,7 @@ ROLE_BY_POSITION = {
     'Knee-right':  'quat',
 }
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF'
+dongle_macs = ['00:E0:5C:48:01:21', '00:E0:5C:48:03:93','00:E0:5C:48:05:B5', '00:E0:5C:48:00:F2'
 ]
 
 CurrentPrediction = [0]
