@@ -172,10 +172,10 @@ async def handle_mode(ws, mode_value: str):
     mode = normalize_mode(mode_value)
     print(f"[MODE] selected={mode}", flush=True)
 
-    start_aliases  = {"Start Streaming", '"Start Streaming', 'Start Streaming'}
+    st = {"Start Streaming",'"Start Streaming"','Start Streaming'}
 
     # Start streaming modes
-    if mode in start_aliases:
+    if mode in ("Start Streaming") or mode in st:
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED")
             return
@@ -262,7 +262,10 @@ def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
 def normalize_mode(s: str) -> str:
     if not isinstance(s, str):
         return ""
-    return s.strip().strip('"')  # tolerate quoted tokens from client
+    t = s.strip()
+    if len(t) >= 2 and t[0] == t[-1] == '"':
+        t = t[1:-1].strip()
+    return t
 
 
 def start_streaming_now() -> bool:
