@@ -150,7 +150,7 @@ async def server(ws):
                     # --- mode as a plain/quoted string token ---
                     if isinstance(raw, str):
                         candidate = normalize_mode(raw)
-                        if candidate in ("Start Streaming",
+                        if candidate in ('"Start Streaming"',
                                         '"Standby"', '"Stop Streaming"', "None",
                                         '"Calibration"', '"Diagnostics"'):
                             await handle_mode(ws, candidate)
