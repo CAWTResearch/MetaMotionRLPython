@@ -140,7 +140,7 @@ async def server(ws):
                     configure_sensors(states, quats, normals)
                     configured_event.set()
                 
-                    # --- mode as JSON: {"mode":"Measurement"} or {"action":"set_mode","mode":"Standby"} ---
+                    # --- mode as JSON: {"mode":"Start Streaming"} or {"action":"set_mode","mode":"Standby"} ---
                     if payload and ("mode" in payload or payload.get("action") == "set_mode"):
                         mode_value = payload.get("mode")
                         if isinstance(mode_value, str):
@@ -150,7 +150,7 @@ async def server(ws):
                     # --- mode as a plain/quoted string token ---
                     if isinstance(raw, str):
                         candidate = normalize_mode(raw)
-                        if candidate in ('"Start Streaming"',
+                        if candidate in ("Start Streaming",
                                         '"Standby"', '"Stop Streaming"', "None",
                                         '"Calibration"', '"Diagnostics"'):
                             await handle_mode(ws, candidate)
@@ -172,8 +172,10 @@ async def handle_mode(ws, mode_value: str):
     mode = normalize_mode(mode_value)
     print(f"[MODE] selected={mode}", flush=True)
 
+    start_aliases  = {"Start Streaming", '"Start Streaming', 'Start Streaming'}
+
     # Start streaming modes
-    if mode in ("Start Streaming"):
+    if mode in start_aliases:
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED")
             return
