@@ -92,7 +92,7 @@ async def server(ws):
     print("Client connected", flush=True)
     try:
         async for raw in ws:
-            print(f"[WS] raw={raw[:120]}...", flush=True)  # trim for sanity
+            print(f"{raw[:120]}...", flush=True)  # trim for sanity
             payload = try_parse_json(raw)
 
             # info ping
