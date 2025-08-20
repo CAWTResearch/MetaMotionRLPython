@@ -173,7 +173,7 @@ async def handle_mode(ws, mode_value: str):
     print(f"[MODE] selected={mode}", flush=True)
 
     # Start streaming modes
-    if mode in ('"Start Streaming"'):
+    if mode in ("Start Streaming"):
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED")
             return
