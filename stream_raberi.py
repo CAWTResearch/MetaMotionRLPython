@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from threading import Thread, Event
-import asyncio, websockets
+
 import joblib, csv
 import numpy as np
 
@@ -20,7 +20,7 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:01:21', '00:E0:5C:48:03:93','00:E0:5C:48:05:B5', '00:E0:5C:48:00:F2'
+dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF'
 ]
 # '3C:0A:F3:10:17:F0'
 #'D8:3A:DD:EA:0C:EF'
@@ -37,8 +37,6 @@ output_dim=6
 
 QuaternionSensors = []
 NormalSensors = []
-
-CurrentPrediction = [0]
 
 profiles = [
     {"interval":8.75, "latency":0, "timeout":10000},
@@ -57,31 +55,6 @@ pred_writer.writerow([
     'prediction',
     *[f'prob_{i}' for i in range(output_dim)]
 ])
-
-async def server(websocket):
-    print("Client connected")
-    try:
-        async for msg in websocket:
-            # e.g. respond to “get_info”
-            if msg == "get_info":
-                info = get_realtime_info(CurrentPrediction)       # your custom function
-                await websocket.send(info)
-            else:
-                # fallback / logging
-                await websocket.send(f"Unknown command: {msg}")
-    except websockets.ConnectionClosed:
-        print("Client disconnected")
-
-
-def get_realtime_info(prediction):
-    # gather whatever you need here; stub:
-    return str(prediction[0])
-
-async def start():
-    async with websockets.serve(server, "0.0.0.0", 8765):
-        print("Server listening on 0.0.0.0:8765")
-        await asyncio.Future()  # run forever
-
 
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
@@ -572,13 +545,12 @@ def get_prediction(model):
             pred_writer.writerow([timestamp, prediction, *probabilities])
             pred_file.flush()
 
-            CurrentPrediction[0] = prediction
-
             # prev_time = end_time 
             # time.sleep(0.1)
 
 # Main loop
 if __name__ == '__main__':
+
     force_disconnect_sensors()
     connect_sensors(device_macs, dongle_macs)
     configure_and_subscribe_sensors(states, 3, 3)
@@ -595,22 +567,16 @@ if __name__ == '__main__':
     model.eval()
     print("Modeled again")
 
-    # data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
-    # data_writer = csv.writer(data_file)
-    # # Build combined‐data headers from your sensor lists:
-    # data_headers = ['host_time']
-    # for name,_ in QuaternionSensors:
-    #     data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
-    # for name,_ in NormalSensors:
-    #     data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
-    #     data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
-    # data_writer.writerow(data_headers)
-
-    def start_ws():
-        asyncio.run(start())
-    ws_thread = Thread(target=start_ws, daemon=True)
-    ws_thread.start()
-    print("WebSocket server running in background.")
+    data_file = open(os.path.join('DriveUpload', 'combined_data.csv'), 'w', newline='')
+    data_writer = csv.writer(data_file)
+    # Build combined‐data headers from your sensor lists:
+    data_headers = ['host_time']
+    for name,_ in QuaternionSensors:
+        data_headers += [f'{name}_{axis}' for axis in ('w','x','y','z')]
+    for name,_ in NormalSensors:
+        data_headers += [f'{name}_acc_{ax}'  for ax in ('x','y','z')]
+        data_headers += [f'{name}_gyro_{ax}' for ax in ('x','y','z')]
+    data_writer.writerow(data_headers)
 
     try:
         print("tried")
