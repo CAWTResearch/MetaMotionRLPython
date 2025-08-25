@@ -137,6 +137,14 @@ async def server(ws):
                 print("[WS] get_info", flush=True)
                 await ws.send(get_realtime_info())
                 continue
+
+            if isinstance(raw, str):
+                candidate = normalize_mode(raw)
+                if candidate in ALLOWED_MODES:
+                    print("Mode found!")
+                    await handle_mode(ws, candidate)
+                    continue
+            await ws.send('"MAPPING_APPLIED"')
             
             if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
@@ -183,14 +191,6 @@ async def server(ws):
                         if isinstance(mode_value, str):
                             await handle_mode(ws, mode_value)
                             continue
-
-                    # --- mode as a plain/quoted string token ---
-                if isinstance(raw, str):
-                    candidate = normalize_mode(raw)
-                    if candidate in ALLOWED_MODES:
-                        await handle_mode(ws, candidate)
-                        continue
-                await ws.send('"MAPPING_APPLIED"')
 
     except websockets.ConnectionClosed:
         print("Client disconnected")
@@ -289,16 +289,25 @@ def normalize_mode(s: str) -> str:
     if not isinstance(s, str):
         return ""
     t = s.strip()
-    # Strip repeated surrounding quotes
+
+    # Repeatedly JSON-decode as long as it's a JSON string.
+    # This turns "\"Start Streaming\"" -> '"Start Streaming"' -> 'Start Streaming'
+    for _ in range(3):
+        try:
+            x = json.loads(t)
+        except Exception:
+            break
+        if isinstance(x, str):
+            t = x.strip()
+            continue
+        break
+
+    # Final safety: strip any surrounding quotes
     while len(t) >= 2 and t[0] == t[-1] == '"':
         t = t[1:-1].strip()
-    # If still has escaped quotes (from double-encoding), unescape once
-    if t.startswith('\\"') and t.endswith('\\"'):
-        try:
-            t = json.loads(f'"{t}"')  
-        except Exception:
-            pass
+
     return t
+
 
 def start_streaming_now() -> bool:
     if not configured_event.is_set():
