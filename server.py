@@ -132,11 +132,11 @@ async def server(ws):
                 await handle_mode(ws, payload.get("mode", ""))
                 continue
 
-            # info ping
-            if raw in ("get_info", '"get_info"'):
-                print("[WS] get_info", flush=True)
-                await ws.send(get_realtime_info())
-                continue
+            # # info ping
+            # if raw in ("get_info", '"get_info"'):
+            #     print("[WS] get_info", flush=True)
+            #     await ws.send(get_realtime_info())
+            #     continue
 
             if isinstance(raw, str):
                 candidate = normalize_mode(raw)
@@ -231,10 +231,10 @@ async def handle_mode(ws, mode_value: str):
     await ws.send("UNKNOWN_MODE")
 
 
-def get_realtime_info():
-    # gather whatever you need here; stub:
-    print("Gathering realtime info...")
-    return "0"
+# def get_realtime_info():
+#     # gather whatever you need here; stub:
+#     print("Gathering realtime info...")
+#     return "0"
 
 async def start_ws_server():
     async with websockets.serve(server, "0.0.0.0", 8765):
@@ -247,14 +247,6 @@ def normalize_mac(mac: str) -> str:
     return (mac or "").strip().upper()
 
 def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
-    """
-    Input:  {"Chest-left": "CE:...", "Chest-right": "...", ...}
-    Output: {
-      "normals":     [("Chest-left", "CE:..."), ...],
-      "quats":       [("Chest-right", "F7:..."), ...],
-      "device_macs": ["CE:...", "F7:...", ...]   # (order does not matter)
-    }
-    """
     print("Received mapping!", flush=True)
     selected: List[Tuple[str, str]] = []
     seen: Set[str] = set()
@@ -289,8 +281,6 @@ def normalize_mode(s: str) -> str:
     if not isinstance(s, str):
         return ""
     t = s.strip()
-
-    # Repeatedly JSON-decode as long as it's a JSON string.
     # This turns "\"Start Streaming\"" -> '"Start Streaming"' -> 'Start Streaming'
     for _ in range(3):
         try:
@@ -301,7 +291,6 @@ def normalize_mode(s: str) -> str:
             t = x.strip()
             continue
         break
-
     # Final safety: strip any surrounding quotes
     while len(t) >= 2 and t[0] == t[-1] == '"':
         t = t[1:-1].strip()
@@ -399,20 +388,14 @@ class State:
         self.quat_deque.append(( val.w, val.x, val.y, val.z))
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
-        # self._quat_writer.writerow([host_time, val.w, val.x, val.y, val.z])
-        # self._quat_fh.flush()
         self.quat_count += 1
 
     def acc_data_handler(self, ctx, data_ptr):
 
         host_time = datetime.datetime.now().timestamp()
-        # 3) parse x,y,z
         val = parse_value(data_ptr)
         self.acc_deque.append((val.x, val.y, val.z))
         self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
-
-        # self._acc_writer.writerow([host_time, val.x, val.y, val.z])
-        # self._acc_fh.flush()
         self.acc_count += 1
 
 
@@ -422,9 +405,6 @@ class State:
         val = parse_value(data_ptr)
         self.gyro_deque.append((val.x, val.y, val.z))
         self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
-
-        # self._gyro_writer.writerow([host_time, val.x, val.y, val.z])
-        # self._gyro_fh.flush()
         self.gyro_count += 1
 
 
@@ -478,7 +458,7 @@ def assign_sensors_to_dongles(devices, dongles):
         assign[dongles[i % len(dongles)]].append(mac)
     return assign
 
-def connect_sensors(devices, dongles, retries=10):
+def connect_sensors(devices, dongles, retries=3):
     for dongle, devs in assign_sensors_to_dongles(devices, dongles).items():
         for mac in devs:
             for _ in range(retries):
