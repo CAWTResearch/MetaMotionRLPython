@@ -289,10 +289,16 @@ def normalize_mode(s: str) -> str:
     if not isinstance(s, str):
         return ""
     t = s.strip()
-    if len(t) >= 2 and t[0] == t[-1] == '"':
+    # Strip repeated surrounding quotes
+    while len(t) >= 2 and t[0] == t[-1] == '"':
         t = t[1:-1].strip()
+    # If still has escaped quotes (from double-encoding), unescape once
+    if t.startswith('\\"') and t.endswith('\\"'):
+        try:
+            t = json.loads(f'"{t}"')  
+        except Exception:
+            pass
     return t
-
 
 def start_streaming_now() -> bool:
     if not configured_event.is_set():
