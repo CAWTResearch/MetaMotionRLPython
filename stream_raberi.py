@@ -12,6 +12,8 @@ import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from threading import Thread, Event
+from typing import Dict, List, Tuple, Set, Any
+import re
 
 import joblib, csv
 import numpy as np
@@ -20,10 +22,41 @@ import numpy as np
 # device_macs = ["F8:DC:C7:F1:48:7A", "CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "FC:97:E9:E0:E8:E4", "F4:73:A1:AB:BB:64" ,"E6:AC:5E:B8:4C:D9", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7"] #NEW
 device_macs = ["CE:5A:39:E6:8F:B3", "F7:68:55:8D:84:0E", "F8:DC:C7:F1:48:7A", "E6:4F:B9:D7:18:7C", "F0:3D:E7:ED:F6:F7", "F4:73:A1:AB:BB:64"]
 
-dongle_macs = ['00:E0:5C:48:02:38', '00:E0:5C:48:0B:98', '00:E0:5C:48:01:21', '00:E0:5C:48:03:93', 'D8:3A:DD:EA:0C:EF'
-]
-# '3C:0A:F3:10:17:F0'
-#'D8:3A:DD:EA:0C:EF'
+def detect_dongle_macs() -> List[str]:
+    macs_by_hci: List[Tuple[int, str]] = []
+    # --- Try hcitool dev ---
+    try:
+        res = subprocess.run(["hcitool", "dev"], capture_output=True, text=True, check=False)
+        for line in res.stdout.splitlines():
+            parts = line.strip().split()
+            # Expected lines look like: "hci0    00:E0:5C:48:03:93"
+            if len(parts) == 2 and parts[0].startswith("hci"):
+                hci_name, mac = parts
+                if re.fullmatch(r"[0-9A-Fa-f:]{17}", mac):
+                    try:
+                        idx = int(hci_name[3:])
+                        macs_by_hci.append((idx, mac.upper()))
+                    except ValueError:
+                        pass
+    except FileNotFoundError:
+        pass
+
+    # Sort by hci index and dedupe while preserving order
+    macs_by_hci.sort(key=lambda t: t[0])
+    seen = set()
+    ordered = []
+    for _, mac in macs_by_hci:
+        if mac not in seen:
+            seen.add(mac)
+            ordered.append(mac)
+    print(ordered)
+    return ordered
+
+dongle_macs = detect_dongle_macs()
+if not dongle_macs:
+    print("[WARN] No Bluetooth adapters detected via hcitool or bluetoothctl; connections may fail.")
+
+
 states = []
 
 buffer = deque(maxlen=50)
