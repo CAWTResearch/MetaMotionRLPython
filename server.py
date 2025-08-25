@@ -6,14 +6,15 @@ from mbientlab.metawear.cbindings import (
     AccBmi270Odr, AccBoschRange,
     GyroBoschOdr, GyroBoschRange
 )
-import subprocess, time, sys, threading, datetime, os
+import subprocess, time, sys, threading, datetime
 from collections import deque
 import torch
 import torch.nn as nn
 from mbientlab.warble import *
 from threading import Thread, Event, Lock
 import asyncio, websockets
-import joblib, csv
+import joblib
+import re
 import numpy as np
 import json
 from typing import Dict, List, Tuple, Set, Any
@@ -28,6 +29,7 @@ config_lock = Lock()
 streaming_event = Event()     
 configured_event = Event()   
 
+ALLOWED_MODES = {"Start Streaming", "Standby", "Stop Streaming", "None", "Calibration", "Diagnostics"}
 
 buffer = deque(maxlen=50)
 combinecounter = 0
@@ -53,9 +55,6 @@ ROLE_BY_POSITION = {
     'Knee-right':  'quat',
 }
 
-dongle_macs = ['00:E0:5C:48:01:21', '00:E0:5C:48:03:93','00:E0:5C:48:05:B5', '00:E0:5C:48:00:F2'
-]
-
 CurrentPrediction = [0]
 
 profiles = [
@@ -66,6 +65,40 @@ profiles = [
     {"interval":13.75, "latency":0, "timeout":10000},
     {"interval":7.5, "latency":0, "timeout":10000},
 ]
+
+def detect_dongle_macs() -> List[str]:
+    macs_by_hci: List[Tuple[int, str]] = []
+    # --- Try hcitool dev ---
+    try:
+        res = subprocess.run(["hcitool", "dev"], capture_output=True, text=True, check=False)
+        for line in res.stdout.splitlines():
+            parts = line.strip().split()
+            # Expected lines look like: "hci0    00:E0:5C:48:03:93"
+            if len(parts) == 2 and parts[0].startswith("hci"):
+                hci_name, mac = parts
+                if re.fullmatch(r"[0-9A-Fa-f:]{17}", mac):
+                    try:
+                        idx = int(hci_name[3:])
+                        macs_by_hci.append((idx, mac.upper()))
+                    except ValueError:
+                        pass
+    except FileNotFoundError:
+        pass
+
+    # Sort by hci index and dedupe while preserving order
+    macs_by_hci.sort(key=lambda t: t[0])
+    seen = set()
+    ordered = []
+    for _, mac in macs_by_hci:
+        if mac not in seen:
+            seen.add(mac)
+            ordered.append(mac)
+    print(ordered)
+    return ordered
+
+dongle_macs = detect_dongle_macs()
+if not dongle_macs:
+    print("[WARN] No Bluetooth adapters detected via hcitool or bluetoothctl; connections may fail.")
 
 def try_parse_json(raw: str):
 
@@ -94,6 +127,10 @@ async def server(ws):
         async for raw in ws:
             print(f"{raw[:120]}...", flush=True)  # trim for sanity
             payload = try_parse_json(raw)
+
+            if payload and (payload.get("action") == "set_mode" or "mode" in payload):
+                await handle_mode(ws, payload.get("mode", ""))
+                continue
 
             # info ping
             if raw in ("get_info", '"get_info"'):
@@ -148,13 +185,11 @@ async def server(ws):
                             continue
 
                     # --- mode as a plain/quoted string token ---
-                    if isinstance(raw, str):
-                        candidate = normalize_mode(raw)
-                        if candidate in ('"Start Streaming"',
-                                        '"Standby"', '"Stop Streaming"', "None",
-                                        '"Calibration"', '"Diagnostics"'):
-                            await handle_mode(ws, candidate)
-                            continue
+                if isinstance(raw, str):
+                    candidate = normalize_mode(raw)
+                    if candidate in ALLOWED_MODES:
+                        await handle_mode(ws, candidate)
+                        continue
                 await ws.send('"MAPPING_APPLIED"')
 
     except websockets.ConnectionClosed:
@@ -172,36 +207,27 @@ async def handle_mode(ws, mode_value: str):
     mode = normalize_mode(mode_value)
     print(f"[MODE] selected={mode}", flush=True)
 
-    st = {"Start Streaming",'"Start Streaming"','Start Streaming'}
-
-    # Start streaming modes
-    if mode in ("Start Streaming") or mode in st:
+    if mode == "Start Streaming":
         if streaming_event.is_set():
-            await ws.send("STREAMING_ALREADY_STARTED")
-            return
+            await ws.send("STREAMING_ALREADY_STARTED"); return
         if start_streaming_now():
             await ws.send("STREAMING_STARTED")
         else:
             await ws.send("NOT_CONFIGURED")
         return
 
-    # Stop / standby
-    if mode in ('"Standby"', '"Stop Streaming"', '"None'):
+    if mode in {"Standby", "Stop Streaming", "None"}:
         if streaming_event.is_set():
-            stop_streaming_now()
-            await ws.send("STREAMING_STOPPED"), 
+            stop_streaming_now(); await ws.send("STREAMING_STOPPED")
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
 
-    # Non-streaming modes you might use later
-    if mode in ("Calibration", "Diagnostics"):
-        # Usually you want streams OFF for these
+    if mode in {"Calibration", "Diagnostics"}:
         if streaming_event.is_set():
             stop_streaming_now()
         await ws.send(f"MODE_SET:{mode}")
         return
-
     await ws.send("UNKNOWN_MODE")
 
 
