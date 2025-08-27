@@ -134,6 +134,14 @@ async def server(ws):
             print(f"{raw[:120]}...", flush=True)  # trim for sanity
             payload = try_parse_json(raw)
 
+            if payload and payload.get("action") == "get_predictions":
+                await ws.send(json.dumps({
+                    "type": "predictions_dump",
+                    "count": len(predictions_log),
+                    "data": list(predictions_log),
+                }))
+                continue
+
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
                 await handle_mode(ws, payload.get("mode", ""))
                 continue
