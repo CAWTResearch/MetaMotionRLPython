@@ -817,7 +817,7 @@ def get_prediction(model):
                 payload = {
                     "type": "prediction",
                     "prediction": prediction,
-                    "probobabilities": probabilities,
+                    "probabilities": probabilities,
                     "time": c_time,
                 }
                 asyncio.run_coroutine_threadsafe(broadcast(payload), WS_LOOP)
