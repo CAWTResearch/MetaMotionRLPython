@@ -36,6 +36,7 @@ configured_event = Event()
 ALLOWED_MODES = {"Start Streaming", "Standby", "Stop Streaming", "None", "Calibration", "Diagnostics"}
 
 buffer = deque(maxlen=50)
+predictions_log = deque(maxlen=100000)
 combinecounter = 0
 predicted_event = Event()
 input_dim=30 
@@ -213,6 +214,7 @@ async def handle_mode(ws, mode_value: str):
             await ws.send("STREAMING_ALREADY_STARTED"); return
         if start_streaming_now():
             await ws.send("STREAMING_STARTED")
+            predictions_log.clear()
         else:
             await ws.send("NOT_CONFIGURED")
         return
@@ -220,6 +222,11 @@ async def handle_mode(ws, mode_value: str):
     if mode in {"Standby", "Stop Streaming", "None"}:
         if streaming_event.is_set():
             stop_streaming_now(); await ws.send("STREAMING_STOPPED")
+            await ws.send(json.dumps({
+                "type": "predictions_dump",
+                "count": len(predictions_log),
+                "data": list(predictions_log)  
+            }))
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
@@ -797,14 +804,20 @@ def get_prediction(model):
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             CurrentPrediction[0] = prediction
+            c_time = time.time()
             if WS_LOOP is not None:
                 payload = {
                     "type": "prediction",
                     "prediction": prediction,
                     "probobabilities": probabilities,
-                    "time": time.time(),
+                    "time": c_time,
                 }
                 asyncio.run_coroutine_threadsafe(broadcast(payload), WS_LOOP)
+                predictions_log.append({
+                    "ts": c_time,
+                    "prediction": prediction,
+                    "probabilities": probabilities
+                })
         else:
             time.sleep(0.002)
 
