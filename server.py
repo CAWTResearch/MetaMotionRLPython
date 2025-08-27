@@ -17,7 +17,11 @@ import joblib
 import re
 import numpy as np
 import json
-from typing import Dict, List, Tuple, Set, Any
+from typing import Dict, List, Tuple, Set, Any, Set, Optional
+from websockets.server import WebSocketServerProtocol
+
+CONNECTED: Set[WebSocketServerProtocol] = set()
+WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
 
 states: List["State"] = []
 NormalSensors: List[Tuple[str, "State"]] = []
@@ -123,6 +127,7 @@ def try_parse_json(raw: str):
 
 async def server(ws):
     print("Client connected", flush=True)
+    CONNECTED.add(ws)
     try:
         async for raw in ws:
             print(f"{raw[:120]}...", flush=True)  # trim for sanity
@@ -131,12 +136,6 @@ async def server(ws):
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
                 await handle_mode(ws, payload.get("mode", ""))
                 continue
-
-            # # info ping
-            # if raw in ("get_info", '"get_info"'):
-            #     print("[WS] get_info", flush=True)
-            #     await ws.send(get_realtime_info())
-            #     continue
 
             if isinstance(raw, str):
                 candidate = normalize_mode(raw)
@@ -194,6 +193,8 @@ async def server(ws):
 
     except websockets.ConnectionClosed:
         print("Client disconnected")
+    finally:
+        CONNECTED.discard(ws)
 
 def mode(message):
     modes = {'"Standby"': 0,
@@ -223,7 +224,7 @@ async def handle_mode(ws, mode_value: str):
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
 
-    if mode in {"Calibration", "Diagnostics"}:
+    if mode in {"Calibration"}:
         if streaming_event.is_set():
             stop_streaming_now()
         await ws.send(f"MODE_SET:{mode}")
@@ -237,9 +238,22 @@ async def handle_mode(ws, mode_value: str):
 #     return "0"
 
 async def start_ws_server():
+    global WS_LOOP
+    WS_LOOP = asyncio.get_running_loop()
     async with websockets.serve(server, "0.0.0.0", 8765):
         print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
+    
+async def broadcast(obj):
+    msg = json.dumps(obj, separators=(",", ":"))
+    dead = []
+    for ws in list(CONNECTED):
+        try:
+            await ws.send(msg)
+        except Exception:
+            dead.append(ws)
+    for ws in dead:
+        CONNECTED.discard(ws)
 
 POSITION_BY_MAC: Dict[str, str] = {}
 
@@ -317,6 +331,10 @@ def stop_streaming_now() -> bool:
         print("[MODE] stopping streaming...", flush=True)
         streaming_event.clear()
         stop_subscriptions()
+        buffer.clear()                 # drop any queued frames
+        global combinecounter
+        combinecounter = 0             # reset frame counter
+        predicted_event.clear()
     return True
 
 def preprocess_data(buffer, scaler):
@@ -779,6 +797,14 @@ def get_prediction(model):
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             CurrentPrediction[0] = prediction
+            if WS_LOOP is not None:
+                payload = {
+                    "type": "prediction",
+                    "prediction": prediction,
+                    "probobabilities": probabilities,
+                    "time": time.time(),
+                }
+                asyncio.run_coroutine_threadsafe(broadcast(payload), WS_LOOP)
         else:
             time.sleep(0.002)
 
