@@ -37,6 +37,7 @@ ALLOWED_MODES = {"Start Streaming", "Standby", "Stop Streaming", "None", "Calibr
 
 buffer = deque(maxlen=50)
 predictions_log = deque(maxlen=100000)
+sample_log = deque(maxlen=2500000)
 combinecounter = 0
 predicted_event = Event()
 input_dim=30 
@@ -139,6 +140,11 @@ async def server(ws):
                     "type": "predictions_dump",
                     "count": len(predictions_log),
                     "data": list(predictions_log),
+                }))
+                await ws.send(json.dumps({
+                    "type": "sample_dump",
+                    "count": len(sample_log),
+                    "data":  list(sample_log)
                 }))
                 continue
 
@@ -794,6 +800,7 @@ def CombineData():
             gx1, gy1, gz1
         ]
     buffer.append(data)  
+    sample_log.append(data)
     # return data
     return
 
