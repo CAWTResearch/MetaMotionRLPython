@@ -514,7 +514,7 @@ def connect_sensors(devices, dongles, retries=3):
                         break
                 except Exception as e:
                     print(f"Conn err {mac}: {e}")
-                    time.sleep(1)
+                    time.sleep(10)
     return states
 def configureNormal(st: "State", name: str):
     b = st.device.board
