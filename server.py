@@ -79,55 +79,34 @@ profiles = [
 
 CHUNK_BYTES = 64 * 1024
 
-async def stream_csv(ws, filename: str, header: list[str], row_iter):
-    stream_id = f"csv-{int(time.time())}"
-    sha = hashlib.sha256()
+async def stream_csv(ws, rows_iter, filename, mime="text/csv;charset=utf-8", header_line=None, stream_id="samples"):
+    # control: start
+    await ws.send(json.dumps({"type": "file_start", "stream_id": stream_id, "filename": filename, "mime": mime}))
     total = 0
 
-    # tell client a CSV stream is starting
-    await ws.send(json.dumps({
-        "type": "file_start",
-        "stream_id": stream_id,
-        "filename": filename,
-        "mime": "text/csv;charset=utf-8"
-    }))
+    # send header line once
+    if header_line:
+        chunk = (header_line.rstrip("\n") + "\n").encode("utf-8")
+        await ws.send(chunk)
+        total += len(chunk)
 
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(header)
+    # stream rows in batches
+    buf = []
+    bs = 0
+    for row in rows_iter:
+        line = (",".join(map(str, row)) + "\n").encode("utf-8")
+        buf.append(line); bs += len(line)
+        if bs >= 64 * 1024:           # ~64KB per binary frame
+            await ws.send(b"".join(buf))
+            total += bs
+            buf.clear(); bs = 0
+    if bs:
+        await ws.send(b"".join(buf))
+        total += bs
 
-    def flush_buf():
-        nonlocal total
-        data = buf.getvalue().encode("utf-8")
-        if not data:
-            return
-        sha.update(data); total += len(data)
-        # send as BINARY frame
-        return ws.send(data)
+    # control: end
+    await ws.send(json.dumps({"type": "file_end", "stream_id": stream_id, "total_bytes": total}))
 
-    # write rows, chunk by size
-    pending = None
-    for row in row_iter:
-        w.writerow(row)
-        if buf.tell() >= CHUNK_BYTES:
-            if pending: await pending
-            pending = flush_buf()
-            buf.seek(0); buf.truncate(0)
-
-    # final flush
-    if pending: await pending
-    if buf.tell():
-        await ws.send(buf.getvalue().encode("utf-8"))
-        sha.update(buf.getvalue().encode("utf-8"))
-        total += len(buf.getvalue().encode("utf-8"))
-
-    # tell client we’re done
-    await ws.send(json.dumps({
-        "type": "file_end",
-        "stream_id": stream_id,
-        "total_bytes": total,
-        "sha256": sha.hexdigest()
-    }))
 
 def iter_predictions_rows():
     # snapshot to avoid mutation during send
@@ -233,24 +212,25 @@ async def server(ws):
                     continue
             await ws.send('"MAPPING_APPLIED"')
 
+            if payload and payload.get("action") == "download_csv" and payload.get("which") == "samples":
+                header = "idx," + ",".join(f"ch_{i}" for i in range(30))
+                def gen():                           
+                    for i, row in enumerate(sample_log):
+                        yield [i, *row]
+                await stream_csv(ws, rows_iter=gen(), filename="samples.csv", header_line=header, stream_id="samples")
+                continue
+
+
             # ---- CSV downloads (on-demand) ----
-            if payload and payload.get("action") == "download_csv":
-                which = payload.get("which")
+            if payload and payload.get("action") == "download_csv" and payload.get("which") == "predictions":
                 try:
-                    if which == "predictions":
-                        await stream_csv(ws,
-                            filename=f"predictions_{int(time.time())}.csv",
-                            header_cols=PRED_HEADER,
-                            row_iter=iter_predictions_rows()
-                        )
-                    elif which == "samples":
-                        await stream_csv(ws,
-                            filename=f"samples_{int(time.time())}.csv",
-                            header_cols=SAMP_HEADER,
-                            row_iter=iter_samples_rows()
-                        )
-                    else:
-                        await ws.send(json.dumps({"type":"error","message":"unknown CSV type"}))
+                    await stream_csv(
+                        ws,
+                        rows_iter=iter_predictions_rows(),                      
+                        filename=f"predictions_{int(time.time())}.csv",
+                        header_line=",".join(PRED_HEADER),                    
+                        stream_id="predictions"
+                    )
                 except Exception as e:
                     await ws.send(json.dumps({"type":"error","message":f"csv_stream_failed:{e}"}))
                 continue
