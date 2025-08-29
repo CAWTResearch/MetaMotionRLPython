@@ -19,6 +19,7 @@ import numpy as np
 import json
 from typing import Dict, List, Tuple, Set, Any, Set, Optional
 from websockets.server import WebSocketServerProtocol
+import csv, io, time, json, zlib, hashlib, asyncio
 
 CONNECTED: Set[WebSocketServerProtocol] = set()
 WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
@@ -46,6 +47,10 @@ lstm_hidden=256
 lstm_layers=2 
 output_dim=6
 
+PRED_HEADER = ["timestamp_iso","timestamp_unix","prediction","prob_0","prob_1","prob_2","prob_3","prob_4","prob_5"]
+SAMP_HEADER = ["index"] + [f"x{i}" for i in range(30)]
+
+
 POSITIONS = [
     'Chest-left', 'Chest-right',
     'Arm-left', 'Arm-right',
@@ -71,6 +76,74 @@ profiles = [
     {"interval":13.75, "latency":0, "timeout":10000},
     {"interval":7.5, "latency":0, "timeout":10000},
 ]
+
+CHUNK_BYTES = 64 * 1024
+
+async def stream_csv(ws, filename: str, header: list[str], row_iter):
+    stream_id = f"csv-{int(time.time())}"
+    sha = hashlib.sha256()
+    total = 0
+
+    # tell client a CSV stream is starting
+    await ws.send(json.dumps({
+        "type": "file_start",
+        "stream_id": stream_id,
+        "filename": filename,
+        "mime": "text/csv;charset=utf-8"
+    }))
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(header)
+
+    def flush_buf():
+        nonlocal total
+        data = buf.getvalue().encode("utf-8")
+        if not data:
+            return
+        sha.update(data); total += len(data)
+        # send as BINARY frame
+        return ws.send(data)
+
+    # write rows, chunk by size
+    pending = None
+    for row in row_iter:
+        w.writerow(row)
+        if buf.tell() >= CHUNK_BYTES:
+            if pending: await pending
+            pending = flush_buf()
+            buf.seek(0); buf.truncate(0)
+
+    # final flush
+    if pending: await pending
+    if buf.tell():
+        await ws.send(buf.getvalue().encode("utf-8"))
+        sha.update(buf.getvalue().encode("utf-8"))
+        total += len(buf.getvalue().encode("utf-8"))
+
+    # tell client we’re done
+    await ws.send(json.dumps({
+        "type": "file_end",
+        "stream_id": stream_id,
+        "total_bytes": total,
+        "sha256": sha.hexdigest()
+    }))
+
+def iter_predictions_rows():
+    # snapshot to avoid mutation during send
+    snap = list(predictions_log)
+    for r in snap:
+        # r = {"ts": float, "prediction": int, "probabilities": [floats]}
+        ts_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(r["ts"]))  # or datetime.utcfromtimestamp(...)
+        probs = (r.get("probabilities") or [])
+        # pad/truncate to 6 as per your model
+        probs = list(probs[:6]) + [""] * max(0, 6 - len(probs))
+        yield [ts_iso, f'{r["ts"]:.6f}', r["prediction"], *probs]
+
+def iter_samples_rows():
+    for i, data in enumerate(list(sample_log)):
+        yield [i] + list(data)  # simple index + 30 features
+
 
 def detect_dongle_macs() -> List[str]:
     macs_by_hci: List[Tuple[int, str]] = []
@@ -159,6 +232,29 @@ async def server(ws):
                     await handle_mode(ws, candidate)
                     continue
             await ws.send('"MAPPING_APPLIED"')
+
+            # ---- CSV downloads (on-demand) ----
+            if payload and payload.get("action") == "download_csv":
+                which = payload.get("which")
+                try:
+                    if which == "predictions":
+                        await stream_csv(ws,
+                            filename=f"predictions_{int(time.time())}.csv",
+                            header_cols=PRED_HEADER,
+                            row_iter=iter_predictions_rows()
+                        )
+                    elif which == "samples":
+                        await stream_csv(ws,
+                            filename=f"samples_{int(time.time())}.csv",
+                            header_cols=SAMP_HEADER,
+                            row_iter=iter_samples_rows()
+                        )
+                    else:
+                        await ws.send(json.dumps({"type":"error","message":"unknown CSV type"}))
+                except Exception as e:
+                    await ws.send(json.dumps({"type":"error","message":f"csv_stream_failed:{e}"}))
+                continue
+
             
             if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
