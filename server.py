@@ -509,12 +509,12 @@ def connect_sensors(devices, dongles, retries=3):
                         st = State(m)
                         st.profile = profiles[len(states)]
                         m.on_disconnect = lambda status, st=st: reconfigure_and_subscribe(st)
-                        time.sleep(0.1)
+                        time.sleep(1)
                         states.append(st)
                         break
                 except Exception as e:
                     print(f"Conn err {mac}: {e}")
-                    time.sleep(10)
+                    time.sleep(3)
     return states
 def configureNormal(st: "State", name: str):
     b = st.device.board
