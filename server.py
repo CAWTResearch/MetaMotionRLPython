@@ -280,8 +280,8 @@ async def calibrate_quat_device(ws, st):
 
     def calibration_state_handler(ctx, data_ptr):
         value = parse_value(data_ptr)  # MblMwCalibrationState
-        # NOTE: it's "accelerometer" (not accelrometer)
-        acc = value.accelerometer
+
+        acc = value.accelrometer
         gyr = value.gyroscope
         mag = value.magnetometer
 
