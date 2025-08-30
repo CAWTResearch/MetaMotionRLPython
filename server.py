@@ -94,13 +94,12 @@ def _calib_path(mac: str) -> str:
     return os.path.join(CALIB_DIR, f"{mac_s}.bin")
 
 def save_calibration_blob(mac: str, Any) -> None:
-    # cptr is POINTER(CalibrationData) owned by the SDK; copy it before free()
     size = ctypes.sizeof(CalibrationData)
     raw  = ctypes.string_at(Any, size)
     with open(_calib_path(mac), "wb") as f:
         f.write(raw)
 
-def load_calibration_blob(mac: str) -> bytes | None:
+def load_calibration_blob(mac: str) -> Optional[bytes]:
     p = _calib_path(mac)
     if not os.path.exists(p):
         return None
