@@ -221,22 +221,39 @@ def try_parse_json(raw: str):
 
     return obj if isinstance(obj, dict) else None
 
+def find_state_by_mac(mac: str):
+    mac_n = normalize_mac(mac)
+    for st in states:
+        if normalize_mac(st.device.address) == mac_n:
+            return st
+    return None
+
+def connect_single(mac: str, dongles: list[str], retries: int = 3):
+    # round-robin first dongle
+    hci = dongles[0] if dongles else None
+    for _ in range(retries):
+        try:
+            m = MetaWear(mac, hci_mac=hci) if hci else MetaWear(mac)
+            m.connect()
+            if m.is_connected:
+                st = State(m)
+                # pick a safe profile or reuse a default
+                st.profile = profiles[min(len(states), len(profiles)-1)]
+                states.append(st)
+                return st
+        except Exception as e:
+            print(f"[CALIB] connect_single err {mac}: {e}")
+            time.sleep(2)
+    return None
+
 async def calibrate_quat_device(ws, st):
     """
-    Simple, 'like the original' calibration:
-    - put device in NDOF
-    - poll calibration state
-    - when all HIGH, read calibration data, write back, free, done
-    - send JSON progress to the frontend
+    Put the device in NDOF, poll calibration state, when all HIGH read+write calib blob.
+    Works for any connected device; no dependency on Mapping/QuaternionSensors.
     """
     dev = st.device
     b   = dev.board
     mac = dev.address
-
-    # quick guard: st must be in the quaternion list
-    if not any(st is s for _, s in QuaternionSensors):
-        await ws.send(json.dumps({"type":"error","message":f"{mac} is not a quaternion sensor"}))
-        return False
 
     # configure sensor fusion for calibration
     libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
@@ -343,44 +360,28 @@ async def server(ws):
 
             # ---- Calibration trigger (single device) ----
             if payload and payload.get("action") == "calibrate":
-                target_mac = normalize_mac(payload.get("mac",""))
+                target_mac = normalize_mac(payload.get("mac", ""))
 
                 # Stop streaming during calibration
                 if streaming_event.is_set():
                     stop_streaming_now()
                     await ws.send(json.dumps({"type":"status","status":"STREAMING_STOPPED"}))
 
-                # DEBUG: print what we have
-                print("[CALIB] QuaternionSensors:", [(n, s.device.address) for (n, s) in QuaternionSensors], flush=True)
-                print("[CALIB] target_mac:", target_mac, flush=True)
+                # Try to find an existing connection first
+                st = find_state_by_mac(target_mac) if target_mac else None
 
-                # Robust selection (works whether list has tuples or only states)
-                def iter_quat():
-                    for item in QuaternionSensors:
-                        if isinstance(item, tuple) and len(item) == 2:
-                            name, st = item
-                        else:
-                            # fallback if it was stored as just a State
-                            name, st = "q_unknown", item
-                        yield name, st
+                # If not found, try to connect just for calibration
+                if st is None and target_mac:
+                    st = connect_single(target_mac, dongle_macs)
 
-                # Pick first match (or first sensor if mac not provided)
-                match = next(
-                    ((name, st) for (name, st) in iter_quat()
-                    if not target_mac or normalize_mac(st.device.address) == target_mac),
-                    None
-                )
-
-                if match is None:
-                    await ws.send(json.dumps({"type":"error","message":"no_matching_quaternion_sensor"}))
+                if st is None:
+                    await ws.send(json.dumps({"type":"error","message":"no_such_device_or_connect_failed","mac":target_mac}))
                     return
 
-                name, st = match
-                print(f"[CALIB] Calibrating {name} @ {st.device.address}", flush=True)
-
+                print(f"[CALIB] Calibrating {st.device.address}", flush=True)
                 ok = await calibrate_quat_device(ws, st)
 
-                # Return the device to IMU_PLUS after calibration
+                # Put device back to IMU_PLUS (harmless if you weren't streaming yet)
                 try:
                     d = st.device
                     libmetawear.mbl_mw_sensor_fusion_set_mode(d.board, SensorFusionMode.IMU_PLUS)
@@ -390,6 +391,7 @@ async def server(ws):
 
                 await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok":bool(ok)}))
                 return
+
 
 
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
