@@ -87,6 +87,27 @@ profiles = [
 CALIB_DIR = "calibration"
 os.makedirs(CALIB_DIR, exist_ok=True)
 
+# Serialize BLE/GATT commands per board to avoid mid-state errors
+BOARD_LOCKS: dict[int, threading.Lock] = {}
+
+def _board_key(board) -> int:
+    # board is a c_void_p; this returns a stable integer address
+    return int(ctypes.cast(board, ctypes.c_void_p).value or 0)
+
+def _get_board_lock(board) -> threading.Lock:
+    k = _board_key(board)
+    lk = BOARD_LOCKS.get(k)
+    if lk is None:
+        lk = threading.Lock()
+        BOARD_LOCKS[k] = lk
+    return lk
+
+def _with_lock(board, fn, *args, **kwargs):
+    lk = _get_board_lock(board)
+    with lk:
+        return fn(*args, **kwargs)
+
+
 def _calib_path(mac: str) -> str:
     mac_s = (mac or "unknown").replace(":", "-").upper()
     return os.path.join(CALIB_DIR, f"{mac_s}.bin")
@@ -253,15 +274,15 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     prev_on_disc = getattr(dev, "on_disconnect", None)
     dev.on_disconnect = None
 
-    # Configure NDOF for calibration
-    libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
-    libmetawear.mbl_mw_sensor_fusion_write_config(b)
+    # ---- Configure NDOF for calibration (locked) ----
+    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_set_mode, b, SensorFusionMode.NDOF)
+    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_write_config, b)
 
-    signal = libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal(b)
+    signal = _with_lock(b, libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal, b)
 
     done = threading.Event()
     stop_poll = threading.Event()
-    read_issued = threading.Event()     # ensure we call read_calibration_data only once
+    read_issued = threading.Event()   # ensure we fetch blob only once
     timers: list[threading.Timer] = []
 
     def _cancel_timers():
@@ -274,19 +295,19 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     def _schedule_poll():
         if stop_poll.is_set():
             return
-        t = threading.Timer(1.0, lambda: libmetawear.mbl_mw_datasignal_read(signal))
+        t = threading.Timer(1.0, lambda: _with_lock(b, libmetawear.mbl_mw_datasignal_read, signal))
         t.daemon = True
         t.start()
         timers.append(t)
 
     def _save_and_ack(calib_ptr):
         try:
-            # Save blob to disk then write back to device
+            # Save blob then write back to device (both locked)
             save_calibration_blob(mac, calib_ptr)
-            libmetawear.mbl_mw_sensor_fusion_write_calibration_data(b, calib_ptr)
+            _with_lock(b, libmetawear.mbl_mw_sensor_fusion_write_calibration_data, b, calib_ptr)
         finally:
             try:
-                libmetawear.mbl_mw_memory_free(calib_ptr)
+                _with_lock(b, libmetawear.mbl_mw_memory_free, calib_ptr)
             except Exception:
                 pass
         try:
@@ -322,47 +343,49 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         except Exception:
             pass
 
-        # If fully calibrated, issue a single read of calibration data
+        # Fully calibrated?
         if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
             gyr == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
             mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
             if not read_issued.is_set():
                 read_issued.set()
-                # stop creating new polls before we fetch the blob
                 _cancel_timers()
-                libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
+                _with_lock(b, libmetawear.mbl_mw_sensor_fusion_read_calibration_data, b, None, fn_calib_data)
         else:
             _schedule_poll()
 
     fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
 
-    # Start
-    libmetawear.mbl_mw_datasignal_subscribe(signal, None, fn_state)
-    libmetawear.mbl_mw_sensor_fusion_start(b)
+    # ---- Start (locked) ----
+    _with_lock(b, libmetawear.mbl_mw_datasignal_subscribe, signal, None, fn_state)
+    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_start, b)
     await ws.send(json.dumps({"type":"calib_begin","mac":mac}))
-    libmetawear.mbl_mw_datasignal_read(signal)  # first poll
+    _with_lock(b, libmetawear.mbl_mw_datasignal_read, signal)  # first poll
 
-    # Wait or timeout
+    # ---- Wait or timeout ----
     waited = 0.0
     while not done.is_set() and waited < timeout_s:
         await asyncio.sleep(0.1)
         waited += 0.1
 
-    # Stop polling before touching the signal
+    # ---- Stop polling before touching the signal ----
     _cancel_timers()
 
-    # Cleanup
-    try: libmetawear.mbl_mw_sensor_fusion_stop(b)
+    # ---- Cleanup (locked) ----
+    try: _with_lock(b, libmetawear.mbl_mw_sensor_fusion_stop, b)
     except Exception: pass
-    try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
+    try: _with_lock(b, libmetawear.mbl_mw_datasignal_unsubscribe, signal)
     except Exception: pass
 
     ok = done.is_set()
     await ws.send(json.dumps({"type": "calib_done" if ok else "calib_timeout", "mac": mac}))
 
-    # Disconnect safely if requested
+    # Small settle to let last ATT writes flush
+    time.sleep(0.15)
+
+    # ---- Disconnect (locked) ----
     if disconnect_after:
-        try: libmetawear.mbl_mw_debug_disconnect(b)
+        try: _with_lock(b, libmetawear.mbl_mw_debug_disconnect, b)
         except Exception: pass
         try: dev.disconnect()
         except Exception: pass
