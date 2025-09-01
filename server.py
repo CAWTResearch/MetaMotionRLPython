@@ -306,29 +306,17 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     e.wait()
     e.clear()
 
-    # Cleanup fusion + unsubscribe
-    try: libmetawear.mbl_mw_sensor_fusion_stop(b)
-    except Exception: pass
-    try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
-    except Exception: pass
+    dev.on_disconnect = lambda s: e.set()
+    # stop
+    libmetawear.mbl_mw_sensor_fusion_stop(dev.board)
+    time.sleep(2.0)
+    # disconnect
+    libmetawear.mbl_mw_debug_disconnect(dev.board)
+    # wait until done
+    e.wait()
 
     # Let UI know final state before we potentially drop the link
     await ws.send(json.dumps({"type": "calib_done", "mac": mac}))
-
-    # Disconnect if requested (and prevent auto-reconnect)
-    if disconnect_after:
-        try:
-            libmetawear.mbl_mw_debug_disconnect(b)
-        except Exception:
-            pass
-        try:
-            dev.disconnect()  # extra belt-and-suspenders
-        except Exception:
-            pass
-
-    # Restore the previous on_disconnect only if we stayed connected
-    if not disconnect_after:
-        dev.on_disconnect = prev_on_disc
 
 
 async def server(ws):
