@@ -280,9 +280,9 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         print("state: %s" % (value))
         if WS_LOOP is not None:
             asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
-        if (value.accelrometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
-                value.gyroscope == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
-                value.magnetometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
+        if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
+                gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
+                mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
             # read
             libmetawear.mbl_mw_sensor_fusion_read_calibration_data(dev.board, None, fn_wrapper_01)
         else:
