@@ -354,20 +354,10 @@ async def server(ws):
                     return
 
                 print(f"[CALIB] Calibrating {st.device.address}", flush=True)
-                ok = await calibrate_quat_device(ws, st)
-
-                # Put device back to IMU_PLUS (harmless if you weren't streaming yet)
-                try:
-                    d = st.device
-                    libmetawear.mbl_mw_sensor_fusion_set_mode(d.board, SensorFusionMode.IMU_PLUS)
-                    libmetawear.mbl_mw_sensor_fusion_write_config(d.board)
-                except Exception as e:
-                    print(f"[CALIB] Post-calibration mode switch failed for {st.device.address}: {e}", flush=True)
+                await calibrate_quat_device(ws, st)
 
                 await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 continue
-
-
 
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
                 await handle_mode(ws, payload.get("mode", ""))
