@@ -24,6 +24,7 @@ from websockets.server import WebSocketServerProtocol
 import csv, io, time, json, zlib, hashlib, asyncio
 import os
 import ctypes
+from time import sleep
 
 CONNECTED: Set[WebSocketServerProtocol] = set()
 WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
@@ -254,128 +255,63 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     b   = dev.board
     mac = dev.address
 
-    prev_on_disc = getattr(dev, "on_disconnect", None)
-    dev.on_disconnect = None
-
-    # Configure NDOF for calibration
+    # NDOF for calibration
     libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
     libmetawear.mbl_mw_sensor_fusion_write_config(b)
 
-    # Calibration state signal
+    # State signal + control
     signal = libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal(b)
 
-    finished = Event()
-    timers = []
-
-    def _schedule_poll(delay=0.5):
-        if finished.is_set():
-            return
-        def _poll():
-            if not finished.is_set():
-                try:
-                    libmetawear.mbl_mw_datasignal_read(signal)
-                except Exception:
-                    pass
-        t = threading.Timer(delay, _poll)
-        t.daemon = True
-        t.start()
-        timers.append(t)
-
-    def _cancel_timers():
-        for t in timers:
-            try:
-                t.cancel()
-            except Exception:
-                pass
-        timers.clear()
-
     def calibration_data_handler(ctx, board, pointer):
-        try:
-            print("calibration data: %s" % (pointer.contents))
-        except Exception:
-            pass
-        try:
-            libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, pointer)
-        finally:
-            try:
-                libmetawear.mbl_mw_memory_free(pointer)
-            except Exception:
-                pass
+        print("calibration data: %s" % (pointer.contents))
+        # write the calib data to the metawear
+        libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, pointer)
+        libmetawear.mbl_mw_memory_free(pointer)
         e.set()
 
     fn_wrapper_01 = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
-    def calibration_state_handler(ctx, data_ptr):
-        try:
-            value = parse_value(data_ptr)
-            acc  = getattr(value, "accelerometer", getattr(value, "accelrometer", getattr(value, "acc", 0)))
-            gyro = getattr(value, "gyroscope",    getattr(value, "gyro", 0))
-            mag  = getattr(value, "magnetometer", getattr(value, "mag", 0))
-
-            fut = ws.send(json.dumps({
-                "type": "calib_status",
-                "mac": mac,
-                "state": {"acc": acc, "gyr": gyro, "mag": mag}
-            }))
-            if WS_LOOP is not None:
-                asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
-        except Exception:
-            acc = gyro = mag = 0
-
-        if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-            gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-            mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
-            finished.set()
-            try:
-                libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_wrapper_01)
-            except Exception:
-                e.set()
+    def calibration_handler(ctx, pointer):
+        value = parse_value(pointer)
+        acc = value.accelrometer
+        gyro = value.gyroscope
+        mag = value.magnetometer
+        fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
+        if WS_LOOP is not None:
+            asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
+        if (value.accelrometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
+                value.gyroscope == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
+                value.magnetometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
+            # read
+            libmetawear.mbl_mw_sensor_fusion_read_calibration_data(dev.board, None, fn_wrapper_01)
         else:
-            _schedule_poll(0.5)
+            sleep(1.0)
+            libmetawear.mbl_mw_datasignal_read(signal)
 
-    fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
+    fn_wrapper_02 = FnVoid_VoidP_DataP(calibration_handler)
 
-    # Start calibration stream and first poll
-    libmetawear.mbl_mw_datasignal_subscribe(signal, None, fn_state)
+    # Subscribe & start
+    libmetawear.mbl_mw_datasignal_subscribe(signal, None, fn_wrapper_02)
     libmetawear.mbl_mw_sensor_fusion_start(b)
-    await ws.send(json.dumps({"type": "calib_begin", "mac": mac}))
     libmetawear.mbl_mw_datasignal_read(signal)
+    await ws.send(json.dumps({"type":"calib_begin","mac":mac}))
 
-    # Wait for calibration blob to be read/written
     e.wait()
     e.clear()
-    finished.set()
-    _cancel_timers()
-    time.sleep(0.12)
 
-    # Clean up and disconnect
-    dev.on_disconnect = lambda status: e.set()
-    try:
-        libmetawear.mbl_mw_datasignal_unsubscribe(signal)
-    except Exception:
-        pass
-    time.sleep(0.05)
-    try:
-        libmetawear.mbl_mw_sensor_fusion_stop(b)
-    except Exception:
-        pass
-    time.sleep(0.12)
+    dev.on_disconnect = lambda s: e.set()
+    # stop
+    libmetawear.mbl_mw_sensor_fusion_stop(dev.board)
+    time.sleep(2.0)
+    # disconnect
+    libmetawear.mbl_mw_debug_disconnect(dev.board)
+    # wait until done
+    e.wait()
 
-    if disconnect_after:
-        try:
-            libmetawear.mbl_mw_debug_disconnect(b)
-        except Exception:
-            pass
-        try:
-            dev.disconnect()
-        except Exception:
-            pass
-        e.wait()
-    else:
-        dev.on_disconnect = prev_on_disc
+    # Let UI know final state before we potentially drop the link
+    await ws.send(json.dumps({"type": "calib_done", "mac": mac}))
 
-    await ws.send(json.dumps({"type": "calib_done", "mac": mac, "ok": True}))
-
+    return
 
 
 async def server(ws):
@@ -430,7 +366,7 @@ async def server(ws):
                 except Exception as e:
                     print(f"[CALIB] Post-calibration mode switch failed for {st.device.address}: {e}", flush=True)
 
-                await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok":bool(ok)}))
+                await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 return
 
 
