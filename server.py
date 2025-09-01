@@ -278,8 +278,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         mag = value.magnetometer
         fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
         print("state: %s" % (value))
-        if WS_LOOP is not None:
-            asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
+        asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
         if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
                 gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
                 mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
