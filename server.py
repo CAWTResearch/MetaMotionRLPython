@@ -298,7 +298,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
                 asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
         except Exception:
             pass
-        value = parse_value(pointer)
+        value = parse_value(data_ptr)
         if (value.accelrometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
             value.gyroscope == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
             value.magnetometer == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
