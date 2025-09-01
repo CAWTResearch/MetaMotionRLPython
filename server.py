@@ -271,21 +271,21 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     fn_wrapper_01 = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
-    def calibration_handler(ctx, pointer):
+    async def calibration_handler(ctx, pointer):
         value = parse_value(pointer)
         acc = value.accelrometer
         gyro = value.gyroscope
         mag = value.magnetometer
-        fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
+        await ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
         print("state: %s" % (value))
-        asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
         if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
                 gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
                 mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
             # read
             libmetawear.mbl_mw_sensor_fusion_read_calibration_data(dev.board, None, fn_wrapper_01)
         else:
-            threading.Timer(0.5, lambda: libmetawear.mbl_mw_datasignal_read(signal)).start()
+            threading.Timer(1.0, lambda: libmetawear.mbl_mw_datasignal_read(signal)).start()
+
 
     fn_wrapper_02 = FnVoid_VoidP_DataP(calibration_handler)
 
