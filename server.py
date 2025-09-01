@@ -364,7 +364,7 @@ async def server(ws):
                     print(f"[CALIB] Post-calibration mode switch failed for {st.device.address}: {e}", flush=True)
 
                 await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
-                return
+                continue
 
 
 
