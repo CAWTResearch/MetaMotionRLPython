@@ -302,7 +302,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     dev.on_disconnect = lambda s: e.set()
     # stop
     libmetawear.mbl_mw_sensor_fusion_stop(dev.board)
-    time.sleep(2.0)
+    sleep(2.0)
     # disconnect
     libmetawear.mbl_mw_debug_disconnect(dev.board)
     # wait until done
@@ -310,9 +310,6 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     # Let UI know final state before we potentially drop the link
     await ws.send(json.dumps({"type": "calib_done", "mac": mac}))
-
-    return
-
 
 async def server(ws):
     print("Client connected", flush=True)
