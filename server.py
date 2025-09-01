@@ -249,6 +249,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     Put device in NDOF, poll calibration state until all HIGH or timeout,
     read+write calib blob, then optionally DISCONNECT the device.
     """
+    e = Event()
     dev = st.device
     b   = dev.board
     mac = dev.address
@@ -263,9 +264,6 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     # State signal + control
     signal = libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal(b)
-    done = threading.Event()
-    stop_poll = threading.Event()
-    timers: list[threading.Timer] = []
 
     def calibration_data_handler(ctx, board, pointer):
         print("calibration data: %s" % (pointer.contents))
@@ -292,11 +290,8 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
             mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
             libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_wrapper_01)
         else:
-            if not stop_poll.is_set():
-                t = threading.Timer(1.0, lambda: libmetawear.mbl_mw_datasignal_read(signal))
-                t.daemon = True
-                t.start()
-                timers.append(t)
+            time.sleep(1.0)
+            libmetawear.mbl_mw_datasignal_read(signal)
 
     fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
 
@@ -308,17 +303,8 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     # Kick first read
     libmetawear.mbl_mw_datasignal_read(signal)
 
-    # Wait or timeout
-    waited = 0.0
-    while not done.is_set() and waited < timeout_s:
-        await asyncio.sleep(0.1)
-        waited += 0.1
-
-    # Stop further polls & cancel queued timers
-    stop_poll.set()
-    for t in timers:
-        try: t.cancel()
-        except Exception: pass
+    e.wait()
+    e.clear()
 
     # Cleanup fusion + unsubscribe
     try: libmetawear.mbl_mw_sensor_fusion_stop(b)
@@ -326,9 +312,8 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
     except Exception: pass
 
-    ok = done.is_set()
     # Let UI know final state before we potentially drop the link
-    await ws.send(json.dumps({"type": "calib_done" if ok else "calib_timeout", "mac": mac}))
+    await ws.send(json.dumps({"type": "calib_done", "mac": mac}))
 
     # Disconnect if requested (and prevent auto-reconnect)
     if disconnect_after:
@@ -344,10 +329,6 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     # Restore the previous on_disconnect only if we stayed connected
     if not disconnect_after:
         dev.on_disconnect = prev_on_disc
-
-    return ok
-
-
 
 
 async def server(ws):
