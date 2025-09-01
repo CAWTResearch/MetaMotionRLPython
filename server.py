@@ -276,7 +276,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         acc = value.accelrometer
         gyro = value.gyroscope
         mag = value.magnetometer
-        fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state": value}))
+        fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
         print("state: %s" % (value))
         if WS_LOOP is not None:
             asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
