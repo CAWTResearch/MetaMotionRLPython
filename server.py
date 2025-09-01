@@ -253,46 +253,68 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     b   = dev.board
     mac = dev.address
 
-    # NDOF and subscribe
+    # NDOF for calibration
     libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
     libmetawear.mbl_mw_sensor_fusion_write_config(b)
+
     signal = libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal(b)
 
-    # --- safe websocket send from any thread ---
     def push(obj):
         asyncio.run_coroutine_threadsafe(ws.send(json.dumps(obj)), loop)
 
-    # --- calibration data (final blob) ---
-    def calibration_data_handler(ctx, board, pointer):
+    # ---- keep strong refs on the State while we wait ----
+    st._calib_done_evt = done_evt  # optional, but keeps a ref path
+
+    def calibration_data_handler(ctx, board, ptr):
         try:
-            libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, pointer)
+            if ptr:
+                libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, ptr)
         finally:
-            libmetawear.mbl_mw_memory_free(pointer)
-        # unblock the coroutine without blocking the loop
-        loop.call_soon_threadsafe(done_evt.set)
+            try:
+                if ptr: libmetawear.mbl_mw_memory_free(ptr)
+            except Exception:
+                pass
+            loop.call_soon_threadsafe(done_evt.set)
 
     fn_calib_data = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
-    # --- periodic state poll ---
+    def poll_again():
+        try:
+            libmetawear.mbl_mw_datasignal_read(signal)
+        except Exception:
+            # still continue polling a bit later to be resilient
+            loop.call_later(0.5, poll_again)
+
     def calibration_state_handler(ctx, data_ptr):
-        v = parse_value(data_ptr)
-        # some SDKs typo: accelrometer vs accelerometer
-        acc  = getattr(v, "accelerometer", getattr(v, "accelrometer", 0))
-        gyro = getattr(v, "gyroscope", 0)
-        mag  = getattr(v, "magnetometer", 0)
+        try:
+            if not data_ptr:
+                push({"type":"calib_status","mac":mac,"state":{"acc":0,"gyr":0,"mag":0}})
+                loop.call_later(0.5, poll_again)
+                return
 
-        # stream to UI immediately (loop is free, so this will deliver in real time)
-        push({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}})
+            v = parse_value(data_ptr)
+            acc  = getattr(v, "accelerometer", getattr(v, "accelrometer", 0))
+            gyro = getattr(v, "gyroscope", 0)
+            mag  = getattr(v, "magnetometer", 0)
 
-        if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-            gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-            mag  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
-            libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
-        else:
-            # schedule the next read WITHOUT sleeping / blocking
-            loop.call_later(0.5, lambda: libmetawear.mbl_mw_datasignal_read(signal))
+            push({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}})
+
+            if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
+                gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
+                mag  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
+                # read final blob (will set done_evt in fn_calib_data)
+                libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
+            else:
+                loop.call_later(0.5, poll_again)
+        except Exception:
+            # keep polling even if parsing failed one time
+            loop.call_later(0.5, poll_again)
 
     fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
+
+    # strong refs so GC cannot drop them mid-calibration
+    st._calib_fn_state = fn_state
+    st._calib_fn_data  = fn_calib_data
 
     libmetawear.mbl_mw_datasignal_subscribe(signal, None, fn_state)
     libmetawear.mbl_mw_sensor_fusion_start(b)
@@ -300,24 +322,28 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     await ws.send(json.dumps({"type":"calib_begin","mac":mac}))
 
-    # --- await completion asynchronously (doesn't block the loop) ---
+    timed_out = False
     try:
         await asyncio.wait_for(done_evt.wait(), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        timed_out = True
+        await ws.send(json.dumps({"type":"calib_timeout","mac":mac}))
     finally:
-        # stop + unsubscribe (no blocking sleeps)
+        # stop + unsubscribe and drop strong refs
         try: libmetawear.mbl_mw_sensor_fusion_stop(b)
         except: pass
         try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
         except: pass
+        for attr in ("_calib_fn_state","_calib_fn_data","_calib_done_evt"):
+            if hasattr(st, attr):
+                try: delattr(st, attr)
+                except: pass
 
-    # optional disconnect
     if disconnect_after:
-        # if you want to await link drop, use another asyncio.Event and set it via on_disconnect with call_soon_threadsafe
         try: libmetawear.mbl_mw_debug_disconnect(b)
         except: pass
 
-    await ws.send(json.dumps({"type":"calib_done","mac":mac}))
-
+    await ws.send(json.dumps({"type": "calib_done", "mac": mac, "ok": not timed_out}))
 
 async def server(ws):
     print("Client connected", flush=True)
