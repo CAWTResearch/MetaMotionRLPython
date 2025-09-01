@@ -87,27 +87,6 @@ profiles = [
 CALIB_DIR = "calibration"
 os.makedirs(CALIB_DIR, exist_ok=True)
 
-# Serialize BLE/GATT commands per board to avoid mid-state errors
-BOARD_LOCKS: dict[int, threading.Lock] = {}
-
-def _board_key(board) -> int:
-    # board is a c_void_p; this returns a stable integer address
-    return int(ctypes.cast(board, ctypes.c_void_p).value or 0)
-
-def _get_board_lock(board) -> threading.Lock:
-    k = _board_key(board)
-    lk = BOARD_LOCKS.get(k)
-    if lk is None:
-        lk = threading.Lock()
-        BOARD_LOCKS[k] = lk
-    return lk
-
-def _with_lock(board, fn, *args, **kwargs):
-    lk = _get_board_lock(board)
-    with lk:
-        return fn(*args, **kwargs)
-
-
 def _calib_path(mac: str) -> str:
     mac_s = (mac or "unknown").replace(":", "-").upper()
     return os.path.join(CALIB_DIR, f"{mac_s}.bin")
@@ -266,135 +245,103 @@ def connect_single(mac: str, dongles: list[str], retries: int = 3):
     return None
 
 async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeout_s: float = 180.0):
+    """
+    Put device in NDOF, poll calibration state until all HIGH or timeout,
+    read+write calib blob, then optionally DISCONNECT the device.
+    """
     dev = st.device
     b   = dev.board
     mac = dev.address
 
-    # Prevent auto-reconnect while we intentionally drop the link
+    # Temporarily disable any auto-reconnect you attached elsewhere
     prev_on_disc = getattr(dev, "on_disconnect", None)
     dev.on_disconnect = None
 
-    # ---- Configure NDOF for calibration (locked) ----
-    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_set_mode, b, SensorFusionMode.NDOF)
-    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_write_config, b)
+    # NDOF for calibration
+    libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
+    libmetawear.mbl_mw_sensor_fusion_write_config(b)
 
-    signal = _with_lock(b, libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal, b)
-
+    # State signal + control
+    signal = libmetawear.mbl_mw_sensor_fusion_calibration_state_data_signal(b)
     done = threading.Event()
     stop_poll = threading.Event()
-    read_issued = threading.Event()   # ensure we fetch blob only once
     timers: list[threading.Timer] = []
 
-    def _cancel_timers():
-        stop_poll.set()
-        for t in timers:
-            try: t.cancel()
-            except Exception: pass
-        timers.clear()
+    def calibration_data_handler(ctx, board, pointer):
+        print("calibration data: %s" % (pointer.contents))
+        # write the calib data to the metawear
+        libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, pointer)
+        libmetawear.mbl_mw_memory_free(pointer)
+        e.set()
 
-    def _schedule_poll():
-        if stop_poll.is_set():
-            return
-        t = threading.Timer(1.0, lambda: _with_lock(b, libmetawear.mbl_mw_datasignal_read, signal))
-        t.daemon = True
-        t.start()
-        timers.append(t)
-
-    def _save_and_ack(calib_ptr):
-        try:
-            # Save blob then write back to device (both locked)
-            save_calibration_blob(mac, calib_ptr)
-            _with_lock(b, libmetawear.mbl_mw_sensor_fusion_write_calibration_data, b, calib_ptr)
-        finally:
-            try:
-                _with_lock(b, libmetawear.mbl_mw_memory_free, calib_ptr)
-            except Exception:
-                pass
-        try:
-            fut = ws.send(json.dumps({"type":"calib_saved","mac":mac}))
-            if WS_LOOP is not None:
-                asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
-        except Exception:
-            pass
-
-    def calibration_data_handler(ctx, board_ptr, calib_ptr):
-        _save_and_ack(calib_ptr)
-        done.set()
-
-    fn_calib_data = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
+    fn_wrapper_01 = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
     def calibration_state_handler(ctx, data_ptr):
-        # Parse state safely
         try:
-            v = parse_value(data_ptr)
-        except Exception as e:
-            print(f"[CALIB] parse_value error: {e}")
-            return
-
-        acc = getattr(v, "accelerometer", getattr(v, "acc", getattr(v, "accelrometer", 0)))
-        gyr = getattr(v, "gyroscope",    getattr(v, "gyro", 0))
-        mag = getattr(v, "magnetometer", getattr(v, "mag", 0))
-
-        # Push live status
-        try:
-            fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyr,"mag":mag}}))
+            value = parse_value(data_ptr)
+            acc = value.accelrometer
+            gyro = value.gyroscope
+            mag = value.magnetometer
+            fut = ws.send(json.dumps({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}}))
             if WS_LOOP is not None:
                 asyncio.run_coroutine_threadsafe(fut, WS_LOOP)
         except Exception:
             pass
-
-        # Fully calibrated?
-        if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-            gyr == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
+        if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
+            gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and \
             mag == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
-            if not read_issued.is_set():
-                read_issued.set()
-                _cancel_timers()
-                _with_lock(b, libmetawear.mbl_mw_sensor_fusion_read_calibration_data, b, None, fn_calib_data)
+            libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_wrapper_01)
         else:
-            _schedule_poll()
+            if not stop_poll.is_set():
+                t = threading.Timer(1.0, lambda: libmetawear.mbl_mw_datasignal_read(signal))
+                t.daemon = True
+                t.start()
+                timers.append(t)
 
     fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
 
-    # ---- Start (locked) ----
-    _with_lock(b, libmetawear.mbl_mw_datasignal_subscribe, signal, None, fn_state)
-    _with_lock(b, libmetawear.mbl_mw_sensor_fusion_start, b)
+    # Subscribe & start
+    libmetawear.mbl_mw_datasignal_subscribe(signal, None, fn_state)
+    libmetawear.mbl_mw_sensor_fusion_start(b)
     await ws.send(json.dumps({"type":"calib_begin","mac":mac}))
-    _with_lock(b, libmetawear.mbl_mw_datasignal_read, signal)  # first poll
 
-    # ---- Wait or timeout ----
+    # Kick first read
+    libmetawear.mbl_mw_datasignal_read(signal)
+
+    # Wait or timeout
     waited = 0.0
     while not done.is_set() and waited < timeout_s:
         await asyncio.sleep(0.1)
         waited += 0.1
 
-    # ---- Stop polling before touching the signal ----
-    _cancel_timers()
+    # Stop further polls & cancel queued timers
+    stop_poll.set()
+    for t in timers:
+        try: t.cancel()
+        except Exception: pass
 
-    # ---- Cleanup (locked) ----
-    try: _with_lock(b, libmetawear.mbl_mw_sensor_fusion_stop, b)
+    # Cleanup fusion + unsubscribe
+    try: libmetawear.mbl_mw_sensor_fusion_stop(b)
     except Exception: pass
-    try: _with_lock(b, libmetawear.mbl_mw_datasignal_unsubscribe, signal)
+    try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
     except Exception: pass
 
     ok = done.is_set()
+    # Let UI know final state before we potentially drop the link
     await ws.send(json.dumps({"type": "calib_done" if ok else "calib_timeout", "mac": mac}))
 
-    # Small settle to let last ATT writes flush
-    time.sleep(0.15)
-
-    # ---- Disconnect (locked) ----
+    # Disconnect if requested (and prevent auto-reconnect)
     if disconnect_after:
-        try: _with_lock(b, libmetawear.mbl_mw_debug_disconnect, b)
-        except Exception: pass
-        try: dev.disconnect()
-        except Exception: pass
         try:
-            await ws.send(json.dumps({"type":"calib_disconnected","mac":mac}))
+            libmetawear.mbl_mw_debug_disconnect(b)
+        except Exception:
+            pass
+        try:
+            dev.disconnect()  # extra belt-and-suspenders
         except Exception:
             pass
 
-    # Restore handler if we stayed connected
+    # Restore the previous on_disconnect only if we stayed connected
     if not disconnect_after:
         dev.on_disconnect = prev_on_disc
 
