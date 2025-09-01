@@ -286,8 +286,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
             # read
             libmetawear.mbl_mw_sensor_fusion_read_calibration_data(dev.board, None, fn_wrapper_01)
         else:
-            sleep(1.0)
-            libmetawear.mbl_mw_datasignal_read(signal)
+            threading.Timer(0.5, lambda: libmetawear.mbl_mw_datasignal_read(signal)).start()
 
     fn_wrapper_02 = FnVoid_VoidP_DataP(calibration_handler)
 
