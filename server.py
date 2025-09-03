@@ -253,7 +253,6 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     b   = dev.board
     mac = dev.address
 
-    # NDOF for calibration
     libmetawear.mbl_mw_sensor_fusion_set_mode(b, SensorFusionMode.NDOF)
     libmetawear.mbl_mw_sensor_fusion_write_config(b)
 
@@ -262,20 +261,24 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     def push(obj):
         asyncio.run_coroutine_threadsafe(ws.send(json.dumps(obj)), loop)
 
-    # ---- keep strong refs on the State while we wait ----
-    st._calib_done_evt = done_evt  # optional, but keeps a ref path
-    read_requested = False 
+    # keep strong refs
+    st._calib_done_evt = done_evt
+
+    # one-shot guards
+    read_requested = False
+    highs_streak   = 0   # <-- NEW
 
     def calibration_data_handler(ctx, board, ptr):
         try:
             if ptr:
+                # optional: apply immediately; harmless if already applied
                 libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, ptr)
         finally:
             try:
                 if ptr: libmetawear.mbl_mw_memory_free(ptr)
-            except Exception:
-                pass
-            loop.call_soon_threadsafe(done_evt.set)
+            except: pass
+            # do NOT set done here; we already end the flow from state highs
+            # (keeps this callback truly best-effort)
 
     fn_calib_data = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
@@ -283,45 +286,63 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         try:
             libmetawear.mbl_mw_datasignal_read(signal)
         except Exception:
-            # still continue polling a bit later to be resilient
-            loop.call_later(0.5, poll_again)
+            loop.call_later(0.4, poll_again)
+
+    def end_success():
+        # stop state traffic; end quickly
+        try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
+        except: pass
+        try: libmetawear.mbl_mw_sensor_fusion_stop(b)
+        except: pass
+        loop.call_soon_threadsafe(done_evt.set)
 
     def calibration_state_handler(ctx, data_ptr):
+        nonlocal read_requested, highs_streak
         try:
             if not data_ptr:
                 push({"type":"calib_status","mac":mac,"state":{"acc":0,"gyr":0,"mag":0}})
-                loop.call_later(0.5, poll_again)
+                highs_streak = 0
+                loop.call_later(0.4, poll_again)
                 return
 
-            v = parse_value(data_ptr)
+            v    = parse_value(data_ptr)
             acc  = getattr(v, "accelerometer", getattr(v, "accelrometer", 0))
             gyro = getattr(v, "gyroscope", 0)
             mag  = getattr(v, "magnetometer", 0)
 
             push({"type":"calib_status","mac":mac,"state":{"acc":acc,"gyr":gyro,"mag":mag}})
 
-            if (acc == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
+            all_high = (
+                acc  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
                 gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
-                mag  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
-                # read final blob (will set done_evt in fn_calib_data)
+                mag  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH
+            )
+
+            if all_high:
+                highs_streak += 1
                 if not read_requested:
                     read_requested = True
+                    # Try to capture the blob but don't block success on it
                     try:
-                        libmetawear.mbl_mw_datasignal_unsubscribe(signal)  # stop more HIGH packets
+                        libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
                     except Exception:
                         pass
-                    # Now request the blob exactly once
-                    libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
-                # else: ignore repeat HIGHs
+
+                # require two consecutive HIGH samples to be robust
+                if highs_streak >= 2:
+                    end_success()
+                else:
+                    loop.call_later(0.3, poll_again)
             else:
-                loop.call_later(0.5, poll_again)
+                highs_streak = 0
+                loop.call_later(0.4, poll_again)
+
         except Exception:
-            # keep polling even if parsing failed one time
+            highs_streak = 0
             loop.call_later(0.5, poll_again)
 
     fn_state = FnVoid_VoidP_DataP(calibration_state_handler)
 
-    # strong refs so GC cannot drop them mid-calibration
     st._calib_fn_state = fn_state
     st._calib_fn_data  = fn_calib_data
 
@@ -338,7 +359,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         timed_out = True
         await ws.send(json.dumps({"type":"calib_timeout","mac":mac}))
     finally:
-        # stop + unsubscribe and drop strong refs
+        # safety cleanup
         try: libmetawear.mbl_mw_sensor_fusion_stop(b)
         except: pass
         try: libmetawear.mbl_mw_datasignal_unsubscribe(signal)
@@ -352,7 +373,8 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
         try: libmetawear.mbl_mw_debug_disconnect(b)
         except: pass
 
-    await ws.send(json.dumps({"type": "calib_done", "mac": mac, "ok": not timed_out}))
+    await ws.send(json.dumps({"type":"calib_done","mac":mac,"ok": not timed_out}))
+
 
 async def server(ws):
     print("Client connected", flush=True)
