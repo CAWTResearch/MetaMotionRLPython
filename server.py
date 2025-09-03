@@ -54,7 +54,7 @@ lstm_layers=2
 output_dim=6
 
 e = Event()
-CALIB_IN_PROGRESS: asyncio.Lock | None = None
+CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
 
 PRED_HEADER = ["timestamp_iso","timestamp_unix","prediction","prob_0","prob_1","prob_2","prob_3","prob_4","prob_5"]
 SAMP_HEADER = ["index"] + [f"x{i}" for i in range(30)]
