@@ -9,6 +9,7 @@ from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_VoidP_CalibrationDataP
 )
 import subprocess, time, sys, threading, datetime
+import base64
 from collections import deque
 import torch
 import torch.nn as nn
@@ -119,53 +120,66 @@ def apply_calibration_blob(board, blob: bytes) -> bool:
     )
     return True
 
+async def stream_csv_json(ws, rows_iter, filename,
+                          mime="text/csv;charset=utf-8",
+                          header_line=None, stream_id="samples",
+                          chunk_target=64*1024):
+    # start
+    await ws.send(json.dumps({
+        "type": "file_start",
+        "stream_id": stream_id,
+        "filename": filename,
+        "mime": mime
+    }))
 
-CHUNK_BYTES = 64 * 1024
-
-async def stream_csv(ws, rows_iter, filename, mime="text/csv;charset=utf-8", header_line=None, stream_id="samples"):
-    # control: start
-    await ws.send(json.dumps({"type": "file_start", "stream_id": stream_id, "filename": filename, "mime": mime}))
-    total = 0
-
-    # send header line once
+    # build + chunk
+    buf = bytearray()
     if header_line:
-        chunk = (header_line.rstrip("\n") + "\n").encode("utf-8")
-        await ws.send(chunk)
-        total += len(chunk)
+        buf.extend((header_line.rstrip("\n") + "\n").encode("utf-8"))
 
-    # stream rows in batches
-    buf = []
-    bs = 0
+    total = 0
     for row in rows_iter:
         line = (",".join(map(str, row)) + "\n").encode("utf-8")
-        buf.append(line); bs += len(line)
-        if bs >= 64 * 1024:           # ~64KB per binary frame
-            await ws.send(b"".join(buf))
-            total += bs
-            buf.clear(); bs = 0
-    if bs:
-        await ws.send(b"".join(buf))
-        total += bs
+        buf.extend(line)
+        while len(buf) >= chunk_target:
+            chunk = bytes(buf[:chunk_target]); del buf[:chunk_target]
+            b64 = base64.b64encode(chunk).decode("ascii")
+            await ws.send(json.dumps({
+                "type": "file_chunk",
+                "stream_id": stream_id,
+                "data_b64": b64
+            }))
+            total += len(chunk)
 
-    # control: end
-    await ws.send(json.dumps({"type": "file_end", "stream_id": stream_id, "total_bytes": total}))
+    # tail
+    if buf:
+        b64 = base64.b64encode(bytes(buf)).decode("ascii")
+        await ws.send(json.dumps({
+            "type": "file_chunk",
+            "stream_id": stream_id,
+            "data_b64": b64
+        }))
+        total += len(buf)
 
+    # end
+    await ws.send(json.dumps({
+        "type": "file_end",
+        "stream_id": stream_id,
+        "total_bytes": total
+    }))
 
-def iter_predictions_rows():
-    # snapshot to avoid mutation during send
+def iter_samples_rows_snapshot():
+    snap = list(sample_log)
+    for i, data in enumerate(snap):
+        yield [i, *data]
+
+def iter_predictions_rows_snapshot():
     snap = list(predictions_log)
     for r in snap:
-        # r = {"ts": float, "prediction": int, "probabilities": [floats]}
-        ts_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(r["ts"]))  # or datetime.utcfromtimestamp(...)
+        ts_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(r["ts"]))
         probs = (r.get("probabilities") or [])
-        # pad/truncate to 6 as per your model
         probs = list(probs[:6]) + [""] * max(0, 6 - len(probs))
         yield [ts_iso, f'{r["ts"]:.6f}', r["prediction"], *probs]
-
-def iter_samples_rows():
-    for i, data in enumerate(list(sample_log)):
-        yield [i] + list(data)  # simple index + 30 features
-
 
 def detect_dongle_macs() -> List[str]:
     macs_by_hci: List[Tuple[int, str]] = []
@@ -445,30 +459,29 @@ async def server(ws):
                     continue
             await ws.send('"MAPPING_APPLIED"')
 
+            # samples button
             if payload and payload.get("action") == "download_csv" and payload.get("which") == "samples":
                 header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-                def gen():                           
-                    for i, row in enumerate(sample_log):
-                        yield [i, *row]
-                await stream_csv(ws, rows_iter=gen(), filename="samples.csv", header_line=header, stream_id="samples")
+                await stream_csv_json(
+                    ws,
+                    rows_iter=iter_samples_rows_snapshot(),
+                    filename="samples.csv",
+                    header_line=header,
+                    stream_id="samples"
+                )
                 continue
 
-
-            # ---- CSV downloads (on-demand) ----
+            # predictions button
             if payload and payload.get("action") == "download_csv" and payload.get("which") == "predictions":
-                try:
-                    await stream_csv(
-                        ws,
-                        rows_iter=iter_predictions_rows(),                      
-                        filename=f"predictions_{int(time.time())}.csv",
-                        header_line=",".join(PRED_HEADER),                    
-                        stream_id="predictions"
-                    )
-                except Exception as e:
-                    await ws.send(json.dumps({"type":"error","message":f"csv_stream_failed:{e}"}))
+                await stream_csv_json(
+                    ws,
+                    rows_iter=iter_predictions_rows_snapshot(),
+                    filename=f"predictions_{int(time.time())}.csv",
+                    header_line=",".join(PRED_HEADER),
+                    stream_id="predictions"
+                )
                 continue
 
-            
             if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
             ):
@@ -562,7 +575,7 @@ async def handle_mode(ws, mode_value: str):
     await ws.send("UNKNOWN_MODE")
 
 async def start_ws_server():
-    global WS_LOOP
+    global WS_LOOP, CALIB_IN_PROGRESS
     WS_LOOP = asyncio.get_running_loop()
     if CALIB_IN_PROGRESS is None:
         CALIB_IN_PROGRESS = asyncio.Lock()
