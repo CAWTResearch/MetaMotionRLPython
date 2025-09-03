@@ -264,6 +264,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     # ---- keep strong refs on the State while we wait ----
     st._calib_done_evt = done_evt  # optional, but keeps a ref path
+    read_requested = False 
 
     def calibration_data_handler(ctx, board, ptr):
         try:
@@ -303,7 +304,15 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
                 gyro == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH and
                 mag  == Const.SENSOR_FUSION_CALIBRATION_ACCURACY_HIGH):
                 # read final blob (will set done_evt in fn_calib_data)
-                libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
+                if not read_requested:
+                    read_requested = True
+                    try:
+                        libmetawear.mbl_mw_datasignal_unsubscribe(signal)  # stop more HIGH packets
+                    except Exception:
+                        pass
+                    # Now request the blob exactly once
+                    libmetawear.mbl_mw_sensor_fusion_read_calibration_data(b, None, fn_calib_data)
+                # else: ignore repeat HIGHs
             else:
                 loop.call_later(0.5, poll_again)
         except Exception:
