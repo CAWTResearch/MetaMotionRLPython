@@ -120,48 +120,56 @@ def apply_calibration_blob(board, blob: bytes) -> bool:
     )
     return True
 
-async def stream_csv_json(ws, rows_iter, filename,
-                          mime="text/csv;charset=utf-8",
+import zlib
+import base64
+
+async def stream_csv_gzip(ws, rows_iter, filename,
+                          mime="application/gzip",
                           header_line=None, stream_id="samples",
                           chunk_target=64*1024):
-    # start
+    # Announce file
     await ws.send(json.dumps({
         "type": "file_start",
         "stream_id": stream_id,
-        "filename": filename,
+        "filename": filename if filename.endswith(".gz") else filename + ".gz",
         "mime": mime
     }))
 
-    # build + chunk
-    buf = bytearray()
-    if header_line:
-        buf.extend((header_line.rstrip("\n") + "\n").encode("utf-8"))
-
+    comp = zlib.compressobj(wbits=31)  # 31 = gzip format
     total = 0
-    for row in rows_iter:
-        line = (",".join(map(str, row)) + "\n").encode("utf-8")
-        buf.extend(line)
-        while len(buf) >= chunk_target:
-            chunk = bytes(buf[:chunk_target]); del buf[:chunk_target]
-            b64 = base64.b64encode(chunk).decode("ascii")
-            await ws.send(json.dumps({
-                "type": "file_chunk",
-                "stream_id": stream_id,
-                "data_b64": b64
-            }))
-            total += len(chunk)
+    buf = bytearray()
 
-    # tail
-    if buf:
-        b64 = base64.b64encode(bytes(buf)).decode("ascii")
-        await ws.send(json.dumps({
+    def flush_and_send(data: bytes):
+        nonlocal total
+        if not data:
+            return
+        b64 = base64.b64encode(data).decode("ascii")
+        asyncio.create_task(ws.send(json.dumps({
             "type": "file_chunk",
             "stream_id": stream_id,
             "data_b64": b64
-        }))
-        total += len(buf)
+        })))
+        total += len(data)
 
-    # end
+    # Header
+    if header_line:
+        buf.extend((header_line.rstrip("\n") + "\n").encode("utf-8"))
+
+    # Rows
+    for row in rows_iter:
+        line = (",".join(map(str, row)) + "\n").encode("utf-8")
+        buf.extend(line)
+        if len(buf) >= chunk_target:
+            compressed = comp.compress(bytes(buf))
+            flush_and_send(compressed)
+            buf.clear()
+
+    # Tail
+    if buf:
+        compressed = comp.compress(bytes(buf))
+        flush_and_send(compressed)
+    flush_and_send(comp.flush())
+
     await ws.send(json.dumps({
         "type": "file_end",
         "stream_id": stream_id,
@@ -462,7 +470,7 @@ async def server(ws):
             # samples button
             if payload and payload.get("action") == "download_csv" and payload.get("which") == "samples":
                 header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-                await stream_csv_json(
+                await stream_csv_gzip(
                     ws,
                     rows_iter=iter_samples_rows_snapshot(),
                     filename="samples.csv",
@@ -473,7 +481,7 @@ async def server(ws):
 
             # predictions button
             if payload and payload.get("action") == "download_csv" and payload.get("which") == "predictions":
-                await stream_csv_json(
+                await stream_csv_gzip(
                     ws,
                     rows_iter=iter_predictions_rows_snapshot(),
                     filename=f"predictions_{int(time.time())}.csv",
@@ -551,6 +559,7 @@ async def handle_mode(ws, mode_value: str):
         if start_streaming_now():
             await ws.send("STREAMING_STARTED")
             predictions_log.clear()
+            sample_log.clear()
         else:
             await ws.send("NOT_CONFIGURED")
         return
@@ -565,15 +574,13 @@ async def handle_mode(ws, mode_value: str):
             }))
             if len(sample_log) > 0:
                 header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-                await stream_csv_json(
+                await stream_csv_gzip(
                     ws,
                     rows_iter=iter_samples_rows_snapshot(),
                     filename=f"samples_{int(time.time())}.csv",
                     header_line=header,
                     stream_id="samples"
                 )
-                # optional: clear after exporting so the next run starts fresh
-                sample_log.clear()
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
