@@ -54,6 +54,7 @@ lstm_layers=2
 output_dim=6
 
 e = Event()
+CALIB_IN_PROGRESS: asyncio.Lock | None = None
 
 PRED_HEADER = ["timestamp_iso","timestamp_unix","prediction","prob_0","prob_1","prob_2","prob_3","prob_4","prob_5"]
 SAMP_HEADER = ["index"] + [f"x{i}" for i in range(30)]
@@ -400,27 +401,36 @@ async def server(ws):
             # ---- Calibration trigger (single device) ----
             if payload and payload.get("action") == "calibrate":
                 target_mac = normalize_mac(payload.get("mac", ""))
+                global CALIB_IN_PROGRESS
+                if CALIB_IN_PROGRESS is None:
+                    CALIB_IN_PROGRESS = asyncio.Lock()
 
-                # Stop streaming during calibration
-                if streaming_event.is_set():
-                    stop_streaming_now()
-                    await ws.send(json.dumps({"type":"status","status":"STREAMING_STOPPED"}))
+                # (optional) let the UI know if one is already running
+                if CALIB_IN_PROGRESS.locked():
+                    await ws.send(json.dumps({"type":"calib_busy"}))
 
-                # Try to find an existing connection first
-                st = find_state_by_mac(target_mac) if target_mac else None
+                async with CALIB_IN_PROGRESS:
 
-                # If not found, try to connect just for calibration
-                if st is None and target_mac:
-                    st = connect_single(target_mac, dongle_macs)
+                    # Stop streaming during calibration
+                    if streaming_event.is_set():
+                        stop_streaming_now()
+                        await ws.send(json.dumps({"type":"status","status":"STREAMING_STOPPED"}))
 
-                if st is None:
-                    await ws.send(json.dumps({"type":"error","message":"no_such_device_or_connect_failed","mac":target_mac}))
-                    return
+                    # Try to find an existing connection first
+                    st = find_state_by_mac(target_mac) if target_mac else None
 
-                print(f"[CALIB] Calibrating {st.device.address}", flush=True)
-                await calibrate_quat_device(ws, st)
+                    # If not found, try to connect just for calibration
+                    if st is None and target_mac:
+                        st = connect_single(target_mac, dongle_macs)
 
-                await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
+                    if st is None:
+                        await ws.send(json.dumps({"type":"error","message":"no_such_device_or_connect_failed","mac":target_mac}))
+                        return
+
+                    print(f"[CALIB] Calibrating {st.device.address}", flush=True)
+                    await calibrate_quat_device(ws, st)
+
+                    await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 continue
 
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
@@ -554,6 +564,8 @@ async def handle_mode(ws, mode_value: str):
 async def start_ws_server():
     global WS_LOOP
     WS_LOOP = asyncio.get_running_loop()
+    if CALIB_IN_PROGRESS is None:
+        CALIB_IN_PROGRESS = asyncio.Lock()
     async with websockets.serve(server, "0.0.0.0", 8765):
         print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
