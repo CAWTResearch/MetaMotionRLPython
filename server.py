@@ -563,6 +563,17 @@ async def handle_mode(ws, mode_value: str):
                 "count": len(predictions_log),
                 "data": list(predictions_log)  
             }))
+            if len(sample_log) > 0:
+                header = "idx," + ",".join(f"ch_{i}" for i in range(30))
+                await stream_csv_json(
+                    ws,
+                    rows_iter=iter_samples_rows_snapshot(),
+                    filename=f"samples_{int(time.time())}.csv",
+                    header_line=header,
+                    stream_id="samples"
+                )
+                # optional: clear after exporting so the next run starts fresh
+                sample_log.clear()
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
