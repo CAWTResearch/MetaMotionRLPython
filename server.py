@@ -566,21 +566,25 @@ async def handle_mode(ws, mode_value: str):
 
     if mode in {"Standby", "Stop Streaming", "None"}:
         if streaming_event.is_set():
-            stop_streaming_now(); await ws.send("STREAMING_STOPPED")
+            stop_streaming_now()
+            await ws.send("STREAMING_STOPPED")
+
+            # 1) OPTIONAL: keep predictions JSON auto-download (your UI already handles it)
             await ws.send(json.dumps({
                 "type": "predictions_dump",
                 "count": len(predictions_log),
-                "data": list(predictions_log)  
+                "data": list(predictions_log)
             }))
-            if len(sample_log) > 0:
-                header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-                await stream_csv_gzip(
-                    ws,
-                    rows_iter=iter_samples_rows_snapshot(),
-                    filename=f"samples_{int(time.time())}.csv",
-                    header_line=header,
-                    stream_id="samples"
-                )
+
+            # 2) NEW: auto-start CSV stream for samples (triggers browser download)
+            header = "idx," + ",".join(f"ch_{i}" for i in range(30))
+            await stream_csv_gzip(
+                ws,
+                rows_iter=iter_samples_rows_snapshot(),
+                filename=f"samples_{int(time.time())}.csv",
+                header_line=header,
+                stream_id="samples"
+            )
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
