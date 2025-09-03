@@ -576,6 +576,12 @@ async def handle_mode(ws, mode_value: str):
                 "data": list(predictions_log)
             }))
 
+            await ws.send(json.dumps({
+                "type": "sample_dump",
+                "count": len(sample_log),
+                "data": list(sample_log)
+            }))
+
             # 2) NEW: auto-start CSV stream for samples (triggers browser download)
             header = "idx," + ",".join(f"ch_{i}" for i in range(30))
             await stream_csv_gzip(
