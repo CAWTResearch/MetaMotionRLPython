@@ -22,9 +22,11 @@ import numpy as np
 import json
 from typing import Dict, List, Tuple, Set, Any, Set, Optional
 from websockets.server import WebSocketServerProtocol
-import csv, io, time, json, zlib, hashlib, asyncio
+import time, json, zlib, asyncio
 import os
 import ctypes
+import zlib
+import base64
 from time import sleep
 
 CONNECTED: Set[WebSocketServerProtocol] = set()
@@ -94,12 +96,6 @@ def _calib_path(mac: str) -> str:
     mac_s = (mac or "unknown").replace(":", "-").upper()
     return os.path.join(CALIB_DIR, f"{mac_s}.bin")
 
-def save_calibration_blob(mac: str, Any) -> None:
-    size = ctypes.sizeof(CalibrationData)
-    raw  = ctypes.string_at(Any, size)
-    with open(_calib_path(mac), "wb") as f:
-        f.write(raw)
-
 def load_calibration_blob(mac: str) -> Optional[bytes]:
     p = _calib_path(mac)
     if not os.path.exists(p):
@@ -119,9 +115,6 @@ def apply_calibration_blob(board, blob: bytes) -> bool:
         board, ctypes.byref(calib)
     )
     return True
-
-import zlib
-import base64
 
 async def stream_csv_gzip(ws, rows_iter, filename,
                           mime="application/gzip",
@@ -289,19 +282,17 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     # one-shot guards
     read_requested = False
-    highs_streak   = 0   # <-- NEW
+    highs_streak   = 0   
 
     def calibration_data_handler(ctx, board, ptr):
         try:
             if ptr:
-                # optional: apply immediately; harmless if already applied
+
                 libmetawear.mbl_mw_sensor_fusion_write_calibration_data(board, ptr)
         finally:
             try:
                 if ptr: libmetawear.mbl_mw_memory_free(ptr)
             except: pass
-            # do NOT set done here; we already end the flow from state highs
-            # (keeps this callback truly best-effort)
 
     fn_calib_data = FnVoid_VoidP_VoidP_CalibrationDataP(calibration_data_handler)
 
