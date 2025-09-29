@@ -513,8 +513,31 @@ async def server(ws):
                     connect_sensors(deviceMacs, dongle_macs)
 
                     expected = len(normals) + len(quats)
-                    if not states or len(states) != expected:
-                        await ws.send(f"CONNECT_RESULT: connected={len(states)}, expected={expected}")
+                    connected_macs = [normalize_mac(st.device.address) for st in states]
+                    failed_macs = [normalize_mac(m) for m in deviceMacs if normalize_mac(m) not in connected_macs]
+
+                    def mac_role_and_pos(mac: str):
+                        macN = normalize_mac(mac)
+                        pos = POSITION_BY_MAC.get(macN) 
+                        role = ROLE_BY_POSITION.get(pos, "unknown") if pos else "unknown"
+                        return pos, role
+
+                    details = []
+                    for m in connected_macs:
+                        pos, role = mac_role_and_pos(m)
+                        details.append({"mac": m, "position": pos, "role": role, "status": "connected"})
+                    for m in failed_macs:
+                        pos, role = mac_role_and_pos(m)
+                        details.append({"mac": m, "position": pos, "role": role, "status": "failed"})
+
+                    await ws.send(json.dumps({
+                        "type": "connect_result",
+                        "expected": expected,
+                        "connected_count": len(connected_macs),
+                        "connected_macs": connected_macs,
+                        "failed_macs": failed_macs,
+                        "details": details
+                    }))
 
                     # configure by MAC membership (correctly matches normal vs quat)
                     configure_sensors(states, quats, normals)
