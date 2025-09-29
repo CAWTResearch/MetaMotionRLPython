@@ -446,6 +446,10 @@ async def server(ws):
                     await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 continue
 
+            if payload and (payload.get("action") == "disconnect_sensors" in payload):
+                await handle_disconnect_all(ws)
+                continue
+
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
                 await handle_mode(ws, payload.get("mode", ""))
                 continue
@@ -1092,6 +1096,22 @@ def _do_reconnect(st, retries, backoff):
         time.sleep(backoff)
     else:
         return
+    
+async def handle_disconnect_all(ws):
+    with config_lock:
+        try:
+            streaming_event.clear()
+            stop_subscriptions()
+            disconnect_sensors()
+        except Exception as e:
+            print(f"[DISCONNECT_ALL] error: {e}")
+        finally:
+            NormalSensors.clear()
+            QuaternionSensors.clear()
+            states.clear()
+            deviceMacs.clear()
+            configured_event.clear()
+    await ws.send(json.dumps({"type":"status","status":"DISCONNECTED_ALL"}))
 
 class CNN_LSTM_Sensor(nn.Module):
     def __init__(self, input_dim, cnn_out_channels, lstm_hidden, lstm_layers, output_dim):
