@@ -446,7 +446,7 @@ async def server(ws):
                     await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 continue
 
-            if payload and (payload.get("action") == "disconnect_all" in payload):
+            if payload and payload.get("action") == "disconnect_all":
                 await handle_disconnect_all(ws)
                 continue
 
