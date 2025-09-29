@@ -1184,8 +1184,8 @@ if __name__ == "__main__":
     # Load model & scaler up front
     model = CNN_LSTM_Sensor(input_dim=input_dim, cnn_out_channels=cnn_out_channels,
                             lstm_hidden=lstm_hidden, lstm_layers=lstm_layers, output_dim=output_dim)
-    scaler = joblib.load("/home/Pi/Desktop/MetaMotionRLPython/scaler_model_full_model.pkl")
-    model.load_state_dict(torch.load("/home/Pi/Desktop/MetaMotionRLPython/cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
+    scaler = joblib.load("scaler_model_full_model.pkl")
+    model.load_state_dict(torch.load("cnn_lstm_fold2.pth", map_location=torch.device('cpu')))
     model.eval()
     print("Model & scaler loaded")
 
