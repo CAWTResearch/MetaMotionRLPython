@@ -8,8 +8,8 @@ from mbientlab.metawear.cbindings import (
     CalibrationData, 
     FnVoid_VoidP_VoidP_CalibrationDataP
 )
-import subprocess, time, sys, threading, datetime
-import base64
+import subprocess, time, sys, threading
+from datetime import datetime, timezone
 from collections import deque
 import torch
 import torch.nn as nn
@@ -22,11 +22,9 @@ import numpy as np
 import json
 from typing import Dict, List, Tuple, Set, Any, Set, Optional
 from websockets.server import WebSocketServerProtocol
-import time, json, zlib, asyncio
+import time, json, asyncio
 import os
 import ctypes
-import zlib
-import base64
 from time import sleep
 
 CONNECTED: Set[WebSocketServerProtocol] = set()
@@ -115,59 +113,6 @@ def apply_calibration_blob(board, blob: bytes) -> bool:
         board, ctypes.byref(calib)
     )
     return True
-
-async def stream_csv_gzip(ws, rows_iter, filename,
-                          mime="application/gzip",
-                          header_line=None, stream_id="samples",
-                          chunk_target=64*1024):
-    # Announce file
-    await ws.send(json.dumps({
-        "type": "file_start",
-        "stream_id": stream_id,
-        "filename": filename if filename.endswith(".gz") else filename + ".gz",
-        "mime": mime
-    }))
-
-    comp = zlib.compressobj(wbits=31)  # 31 = gzip format
-    total = 0
-    buf = bytearray()
-
-    def flush_and_send(data: bytes):
-        nonlocal total
-        if not data:
-            return
-        b64 = base64.b64encode(data).decode("ascii")
-        asyncio.create_task(ws.send(json.dumps({
-            "type": "file_chunk",
-            "stream_id": stream_id,
-            "data_b64": b64
-        })))
-        total += len(data)
-
-    # Header
-    if header_line:
-        buf.extend((header_line.rstrip("\n") + "\n").encode("utf-8"))
-
-    # Rows
-    for row in rows_iter:
-        line = (",".join(map(str, row)) + "\n").encode("utf-8")
-        buf.extend(line)
-        if len(buf) >= chunk_target:
-            compressed = comp.compress(bytes(buf))
-            flush_and_send(compressed)
-            buf.clear()
-
-    # Tail
-    if buf:
-        compressed = comp.compress(bytes(buf))
-        flush_and_send(compressed)
-    flush_and_send(comp.flush())
-
-    await ws.send(json.dumps({
-        "type": "file_end",
-        "stream_id": stream_id,
-        "total_bytes": total
-    }))
 
 def iter_samples_rows_snapshot():
     snap = list(sample_log)
@@ -462,29 +407,6 @@ async def server(ws):
                     continue
             await ws.send('"MAPPING_APPLIED"')
 
-            # samples button
-            if payload and payload.get("action") == "download_csv" and payload.get("which") == "samples":
-                header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-                await stream_csv_gzip(
-                    ws,
-                    rows_iter=iter_samples_rows_snapshot(),
-                    filename="samples.csv",
-                    header_line=header,
-                    stream_id="samples"
-                )
-                continue
-
-            # predictions button
-            if payload and payload.get("action") == "download_csv" and payload.get("which") == "predictions":
-                await stream_csv_gzip(
-                    ws,
-                    rows_iter=iter_predictions_rows_snapshot(),
-                    filename=f"predictions_{int(time.time())}.csv",
-                    header_line=",".join(PRED_HEADER),
-                    stream_id="predictions"
-                )
-                continue
-
             if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
             ):
@@ -600,15 +522,6 @@ async def handle_mode(ws, mode_value: str):
                 "data": list(sample_log)
             }))
 
-            # 2) NEW: auto-start CSV stream for samples (triggers browser download)
-            header = "idx," + ",".join(f"ch_{i}" for i in range(30))
-            await stream_csv_gzip(
-                ws,
-                rows_iter=iter_samples_rows_snapshot(),
-                filename=f"samples_{int(time.time())}.csv",
-                header_line=header,
-                stream_id="samples"
-            )
         else:
             await ws.send("STREAMING_ALREADY_STOPPED")
         return
@@ -1186,6 +1099,7 @@ def CombineData():
             gx1, gy1, gz1
         ]
     buffer.append(data)  
+    data += [datetime.datetime.now().timestamp()]
     sample_log.append(data)
     # return data
     return
@@ -1205,7 +1119,7 @@ def get_prediction(model):
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             CurrentPrediction[0] = prediction
-            c_time = time.time()
+            c_time = datetime.datetime.now().timestamp()
             if WS_LOOP is not None:
                 payload = {
                     "type": "prediction",
