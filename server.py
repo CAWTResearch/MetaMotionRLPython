@@ -1176,8 +1176,8 @@ def CombineData():
             gx1, gy1, gz1
         ]
     buffer.append(data)  
-    data += [datetime.datetime.now().timestamp()]
-    sample_log.append(data)
+    log = data + datetime.datetime.now().timestamp()
+    sample_log.append(log)
     # return data
     return
 
