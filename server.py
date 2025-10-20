@@ -405,7 +405,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     await ws.send(json.dumps({"type":"calib_done","mac":mac,"ok": not timed_out}))
 
 
-async def server(ws, _path):
+async def server(ws):
     print("Client connected", flush=True)
     CONNECTED.add(ws)
     try:
