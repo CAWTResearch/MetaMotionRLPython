@@ -27,6 +27,76 @@ import os
 import ctypes
 from time import sleep
 
+
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+from googleapiclient.http import MediaFileUpload
+from pathlib import Path
+
+SCOPES = ['https://www.googleapis.com/auth/drive']
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+
+
+ParentFolder = "RealTimeTesting Predictions"
+
+folders_ID = {"Yahid": "1BVlVORstArc-x2uptACGK1vqFcks5SCW", 
+              "Angel": "18KIELRL5BBtaBpIirm9wc1DhOnkM3W8B",
+              "RealTimeTesting Predictions": "1gkEMBR54HxqMs806p1jvURIYh7wUjzwj",
+              "CAWT_DATA": "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
+              }
+
+PARENT_FOLDER_ID = folders_ID[ParentFolder]
+
+LOCAL_DIR = Path("DriveUpload")  
+DEFAULT_SUBFOLDER_NAME = f"upload_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+
+def authenticate():
+    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    return creds
+
+def create_subfolder(service, name, parent_id):
+    file_metadata = {
+        'name': name,
+        'mimeType': 'application/vnd.google-apps.folder',
+        'parents': [parent_id]
+    }
+    folder = service.files().create(body=file_metadata, fields='id').execute()
+    return folder.get('id')
+
+def upload_file(service, file_path, folder_id):
+    file_metadata = {'name': Path(file_path).name, 'parents': [folder_id]}
+    media = MediaFileUpload(str(file_path), mimetype='text/csv', resumable=False)
+
+    service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+
+
+def upload_all_files(subfolder_name: str = DEFAULT_SUBFOLDER_NAME, local_dir: Path = LOCAL_DIR):
+    if not local_dir.exists():
+        raise FileNotFoundError(f"Local folder not found: {local_dir.resolve()}")
+    
+    csvs = sorted([p for p in local_dir.glob("*.csv") if p.is_file()])
+    if not csvs:
+        print(f"No CSV files found in {local_dir.resolve()}")
+        return
+    
+    creds = authenticate()
+    service = build('drive', 'v3', credentials=creds)
+
+    if not subfolder_name in folders_ID:
+        subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
+        folders_ID[subfolder_name] = subfolder_id
+    
+
+    subfolder_id = folders_ID[subfolder_name]
+
+    # Upload files to the new subfolder
+    for csv in csvs:
+        upload_file(service, csv, subfolder_id)
+
 CONNECTED: Set[WebSocketServerProtocol] = set()
 WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
 CalibrationDataP = ctypes.POINTER(CalibrationData)
@@ -335,13 +405,18 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
     await ws.send(json.dumps({"type":"calib_done","mac":mac,"ok": not timed_out}))
 
 
-async def server(ws):
+async def server(ws, _path):
     print("Client connected", flush=True)
     CONNECTED.add(ws)
     try:
         async for raw in ws:
             print(f"{raw[:120]}...", flush=True)  # trim for sanity
             payload = try_parse_json(raw)
+
+            if payload and payload.get("action") == "upload":
+                upload_all_files()
+                await ws.send(json.dumps({"type":"upload_done"}))
+                continue
 
             if payload and payload.get("action") == "get_predictions":
                 await ws.send(json.dumps({
@@ -437,6 +512,7 @@ async def server(ws):
                     deviceMacs[:] = macs
 
                     force_disconnect_sensors()
+                    await ws.send('"CONNECTING_SENSORS"')
                     connect_sensors(deviceMacs, dongle_macs)
 
                     expected = len(normals) + len(quats)
