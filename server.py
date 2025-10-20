@@ -34,7 +34,7 @@ from googleapiclient.http import MediaFileUpload
 from pathlib import Path
 
 SCOPES = ['https://www.googleapis.com/auth/drive']
-SERVICE_ACCOUNT_FILE = 'service_account.json'
+SERVICE_ACCOUNT_FILE = 'DriveUpload/service_account.json'
 
 
 ParentFolder = "RealTimeTesting Predictions"
