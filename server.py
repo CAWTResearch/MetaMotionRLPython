@@ -9,7 +9,6 @@ from mbientlab.metawear.cbindings import (
     FnVoid_VoidP_VoidP_CalibrationDataP
 )
 import subprocess, time, sys, threading
-from datetime import datetime, timezone
 from collections import deque
 import torch
 import torch.nn as nn
@@ -379,6 +378,7 @@ async def server(ws):
 
                     # If not found, try to connect just for calibration
                     if st is None and target_mac:
+                        await ws.send(json.dumps({"type":"calib_connecting","mac":target_mac}))
                         st = connect_single(target_mac, dongle_macs)
 
                     if st is None:
