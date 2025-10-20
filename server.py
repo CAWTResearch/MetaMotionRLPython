@@ -1175,8 +1175,8 @@ def CombineData():
             ax1, ay1, az1,
             gx1, gy1, gz1
         ]
-    buffer.append(list(data))  
-    sample_log.append(list(data) + datetime.datetime.now().timestamp())
+    buffer.append(data)  
+    sample_log.append(data + datetime.datetime.now().timestamp())
     # return data
     return
 
@@ -1195,7 +1195,7 @@ def get_prediction(model):
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
             CurrentPrediction[0] = prediction
-            c_time = datetime.datetime.now().timestamp()
+            c_time = time.time()
             if WS_LOOP is not None:
                 payload = {
                     "type": "prediction",
