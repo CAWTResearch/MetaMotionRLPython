@@ -123,6 +123,7 @@ cnn_out_channels=256
 lstm_hidden=256
 lstm_layers=2 
 output_dim=6
+connected_sensors = 0
 
 e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
@@ -165,7 +166,10 @@ profiles = [
     {"interval":12.5, "latency":0, "timeout":10000},
     {"interval":13.75, "latency":0, "timeout":10000},
     {"interval":7.5, "latency":0, "timeout":10000},
-    {"interval":15, "latency":0, "timeout":10000},
+    {"interval":16.25, "latency":0, "timeout":10000},
+    {"interval":17.5, "latency":0, "timeout":10000},
+    {"interval":18.75, "latency":0, "timeout":10000},
+    {"interval":20, "latency":0, "timeout":10000},
 ]
 
 CALIB_DIR = "calibration"
@@ -524,6 +528,7 @@ async def server(ws):
 
                     force_disconnect_sensors()
                     await ws.send('"CONNECTING_SENSORS"')
+                    connected_sensors = 0
                     connect_sensors(deviceMacs, dongle_macs)
 
                     expected = len(normals) + len(quats)
@@ -540,6 +545,7 @@ async def server(ws):
                     for m in connected_macs:
                         pos, role = mac_role_and_pos(m)
                         details.append({"mac": m, "position": pos, "role": role, "status": "connected"})
+                        connected_sensors += 1
                     for m in failed_macs:
                         pos, role = mac_role_and_pos(m)
                         details.append({"mac": m, "position": pos, "role": role, "status": "failed"})
@@ -584,7 +590,7 @@ async def handle_mode(ws, mode_value: str):
     if mode == "Start Streaming":
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
-        if start_streaming_now():
+        if start_streaming_now() and connected_sensors == 6:
             await ws.send("STREAMING_STARTED")
             predictions_log.clear()
             sample_log.clear()
@@ -992,11 +998,11 @@ def subscribe_sensors():
         if Sensor[1].device.address in OLD_SENSORS:
             # get acc signal and subscribe
             acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
-            libmetawear.mbl_mw_datasignal_subscribe(acc, None, st.accCallback)
+            libmetawear.mbl_mw_datasignal_subscribe(acc, None, st.get_acc_cb())
 
             # get gyro signal and subscribe
             gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
-            libmetawear.mbl_mw_datasignal_subscribe(gyro, None, st.gyroCallback)
+            libmetawear.mbl_mw_datasignal_subscribe(gyro, None, st.get_gyro_cb())
 
             # start acc
             libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
@@ -1081,6 +1087,22 @@ def disconnect_sensors():
 
         libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
 
+        if st.device.address in OLD_SENSORS:
+            # 2) Stop gyro sampling
+            libmetawear.mbl_mw_gyro_bmi160_stop(b)
+   
+            libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(b)
+  
+            # 3) Unsubscribe from accel signal
+            acc_signal = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+
+            libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
+     
+            # 4) Unsubscribe from gyro signal
+            gyro_signal = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
+    
+            libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
+            continue
         # 2) Stop gyro sampling
         libmetawear.mbl_mw_gyro_bmi270_stop(b)
    
