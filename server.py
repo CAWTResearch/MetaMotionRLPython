@@ -134,9 +134,9 @@ SAMP_HEADER = ["index"] + [f"x{i}" for i in range(30)] + ["timestamp"]
 POSITIONS = [
     'Chest-left', 'Chest-right',
     'Arm-left', 'Arm-right',
-    'Knee-left', 'Knee-right'
+    'Knee-left', 'Knee-right',
     'Arm-left2', 'Arm-right2',
-    'Knee-left2', 'Knee-right2'
+    'Knee-left2', 'Knee-right2',
 ]
 
 ROLE_BY_POSITION = {
@@ -165,6 +165,7 @@ profiles = [
     {"interval":12.5, "latency":0, "timeout":10000},
     {"interval":13.75, "latency":0, "timeout":10000},
     {"interval":7.5, "latency":0, "timeout":10000},
+    {"interval":15, "latency":0, "timeout":10000},
 ]
 
 CALIB_DIR = "calibration"
@@ -731,7 +732,6 @@ def preprocess_data(buffer, scaler):
     tensor = torch.tensor(scaled, dtype=torch.float32).unsqueeze(0)  # (1, N, 30)
     return tensor
 
-
 def force_disconnect_sensors():
     try:
         result = subprocess.run(["hcitool", "dev"], capture_output=True, text=True)
@@ -880,12 +880,15 @@ def connect_sensors(devices, dongles, retries=3):
                     print(f"Conn err {mac}: {e}")
                     time.sleep(3)
     return states
+
 def configureNormal(st: "State", name: str):
     b = st.device.board
     print(f"Configuring device Normal {st.device.address} Type: {name}")
 
     if st.device.address in OLD_SENSORS:
-        libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
+        libmetawear.mbl_mw_settings_set_connection_parameters(
+            b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
+        )
         sleep(1.5)
         libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._50Hz) # BMI 160 specific call
         libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
@@ -895,22 +898,6 @@ def configureNormal(st: "State", name: str):
         libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._1000dps)
         libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._50Hz)
         libmetawear.mbl_mw_gyro_bmi160_write_config(b)
-
-        # get acc signal and subscribe
-        acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
-        libmetawear.mbl_mw_datasignal_subscribe(acc, None, st.accCallback)
-
-        # get gyro signal and subscribe
-        gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
-        libmetawear.mbl_mw_datasignal_subscribe(gyro, None, st.gyroCallback)
-
-        # start acc
-        libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
-        libmetawear.mbl_mw_acc_start(b)
-
-        # start gyro
-        libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
-        libmetawear.mbl_mw_gyro_bmi160_start(b)
         NormalSensors.append((name, st))
         time.sleep(0.3)        
     else:
@@ -997,35 +984,48 @@ def configure_sensors(states_list: List["State"],
 
     print(f"{len(states_list)} states; configured {cfg_normals} normals + {cfg_quats} quats")
 
-
-
 def subscribe_sensors():
     for Sensor in NormalSensors:
         st = Sensor[1]
         b = Sensor[1].device.board
-        
-        # Subscribe ACC
-        sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
 
-        libmetawear.mbl_mw_datasignal_subscribe(sig_a, None, st.get_acc_cb())
+        if Sensor[1].device.address in OLD_SENSORS:
+            # get acc signal and subscribe
+            acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+            libmetawear.mbl_mw_datasignal_subscribe(acc, None, st.accCallback)
 
-        libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
-  
-        libmetawear.mbl_mw_acc_start(b)
+            # get gyro signal and subscribe
+            gyro = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
+            libmetawear.mbl_mw_datasignal_subscribe(gyro, None, st.gyroCallback)
 
-        # Subscribe GYRO
-        sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+            # start acc
+            libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
+            libmetawear.mbl_mw_acc_start(b)
 
-        libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
+            # start gyro
+            libmetawear.mbl_mw_gyro_bmi160_enable_rotation_sampling(b)
+            libmetawear.mbl_mw_gyro_bmi160_start(b)
+        else:
+            # Subscribe ACC
+            sig_a = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
 
-        libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+            libmetawear.mbl_mw_datasignal_subscribe(sig_a, None, st.get_acc_cb())
 
-        libmetawear.mbl_mw_gyro_bmi270_start(b)
-
+            libmetawear.mbl_mw_acc_enable_acceleration_sampling(b)
     
+            libmetawear.mbl_mw_acc_start(b)
+
+            # Subscribe GYRO
+            sig_g = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+
+            libmetawear.mbl_mw_datasignal_subscribe(sig_g, None, st.get_gyro_cb())
+
+            libmetawear.mbl_mw_gyro_bmi270_enable_rotation_sampling(b)
+
+            libmetawear.mbl_mw_gyro_bmi270_start(b)
+
     for Sensor in QuaternionSensors:
         st = Sensor[1]
-        d = Sensor[1].device
 
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(b, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.get_quaternion_cb())
@@ -1036,6 +1036,19 @@ def stop_subscriptions():
     # normals
     for _, st in NormalSensors:
         b = st.device.board
+        if st.device.address in OLD_SENSORS:
+            try:
+                libmetawear.mbl_mw_acc_stop(b)
+                libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
+                libmetawear.mbl_mw_gyro_bmi270_stop(b)
+                libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+                acc_signal  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+                gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+                libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
+                libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
+            except Exception:
+                pass
+
         try:
             libmetawear.mbl_mw_acc_stop(b)
             libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
@@ -1049,7 +1062,6 @@ def stop_subscriptions():
             pass
     # quats
     for _, st in QuaternionSensors:
-        d = st.device
         try:
             signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(b, SensorFusionData.QUATERNION)
             libmetawear.mbl_mw_sensor_fusion_stop(b)
@@ -1099,11 +1111,6 @@ def reconfigure_and_subscribe(st, retries=5, backoff=1.0):
 
 def _do_reconnect(st, retries, backoff):
     dev     = st.device
-    b       = dev.board
-    mac     = dev.address
-    profile = st.profile
-
-
     # 1) One big board‐side reset clears out all streams & subscriptions
     if dev.is_connected:
         return
