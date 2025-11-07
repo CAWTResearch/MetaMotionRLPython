@@ -889,6 +889,7 @@ def connect_sensors(devices, dongles, retries=3):
 
 def configureNormal(st: "State", name: str):
     b = st.device.board
+    settings = st.profile
     print(f"Configuring device Normal {st.device.address} Type: {name}")
 
     if st.device.address in OLD_SENSORS:
@@ -907,7 +908,6 @@ def configureNormal(st: "State", name: str):
         NormalSensors.append((name, st))
         time.sleep(0.3)        
     else:
-        settings = st.profile
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
         )
@@ -929,13 +929,15 @@ def configureNormal(st: "State", name: str):
 def configureQuaternions(st: "State", name: str):
     d = st.device
     b = st.device.board
+    settings = st.profile
     print(f"Configuring device Quaternion {d.address} Type: {name}")
 
     if st.device.address in OLD_SENSORS:
-        libmetawear.mbl_mw_settings_set_connection_parameters(b, 7.5, 7.5, 0, 6000)
+        libmetawear.mbl_mw_settings_set_connection_parameters(
+            b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
+        )
         sleep(1.5)
     else:
-        settings = st.profile
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
         )
@@ -1046,10 +1048,10 @@ def stop_subscriptions():
             try:
                 libmetawear.mbl_mw_acc_stop(b)
                 libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
-                libmetawear.mbl_mw_gyro_bmi270_stop(b)
-                libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+                libmetawear.mbl_mw_gyro_bmi160_stop(b)
+                libmetawear.mbl_mw_gyro_bmi160_disable_rotation_sampling(b)
                 acc_signal  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
-                gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+                gyro_signal = libmetawear.mbl_mw_gyro_bmi160_get_rotation_data_signal(b)
                 libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
                 libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
             except Exception:
