@@ -124,13 +124,10 @@ lstm_hidden=256
 lstm_layers=2 
 output_dim=6
 connected_sensors = 0
+offset = 0
 
 e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
-
-PRED_HEADER = ["timestamp_iso","timestamp_unix","prediction","prob_0","prob_1","prob_2","prob_3","prob_4","prob_5"]
-SAMP_HEADER = ["index"] + [f"x{i}" for i in range(30)] + ["timestamp"]
-
 
 POSITIONS = [
     'Chest-left', 'Chest-right',
@@ -154,10 +151,13 @@ ROLE_BY_POSITION = {
 }
 
 OLD_SENSORS = {
-    "F1:1E:E2:6F:1D:E1"
+    "F1:1E:E2:6F:1D:E1",
+    "EE:1B:72:FA:BF:E8",
+    "F9:8C:1E:4A:F5:D0",
+    "FA:F1:20:99:CB:B4",
+    "EC:57:2E:32:05:52",
+    "CE:94:48:FE:5D:C5"
 }
-
-CurrentPrediction = [0]
 
 profiles = [
     {"interval":8.75, "latency":0, "timeout":10000},
@@ -1223,6 +1223,7 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []   
+    
     for name, st in QuaternionSensors:
         # --- QUAT ---
         if len(st.quat_deque) >0:
@@ -1250,9 +1251,12 @@ def CombineData():
             ax1, ay1, az1,
             gx1, gy1, gz1
         ]
+    if offset < 10:
+        offset +=1
+        return
     buffer.append(data)  
     ts = [datetime.datetime.now().timestamp()]
-    sample_log.append(list(data) + ts)
+    sample_log.append(ts + list(data))
     # return data
     return
 
@@ -1270,7 +1274,6 @@ def get_prediction(model):
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
-            CurrentPrediction[0] = prediction
             c_time = time.time()
             if WS_LOOP is not None:
                 payload = {
