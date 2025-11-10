@@ -478,6 +478,16 @@ async def server(ws):
             if payload and (payload.get("action") == "set_mode" or "mode" in payload):
                 await handle_mode(ws, payload.get("mode", ""))
                 continue
+    
+            if payload and payload.get("action") == "Start Collecting":
+                await handle_mode(ws, "Start Collecting")
+                await ws.send(json.dumps({"type":"collection_status","collecting":"COLLECTION_STARTED"}))
+                continue
+
+            if payload and payload.get("action") == "Stop Collecting":
+                await handle_mode(ws, "Stop Collecting")
+                await ws.send(json.dumps({"type":"collection_status","collecting":"COLLECTION_STOPPED"}))
+                continue
 
             if isinstance(raw, str):
                 candidate = normalize_mode(raw)
