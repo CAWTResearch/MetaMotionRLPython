@@ -275,7 +275,7 @@ def find_state_by_mac(mac: str):
             return st
     return None
 
-def connect_single(mac: str, dongles: list[str], retries: int = 3):
+def connect_single(mac: str, dongles: list[str], retries: int = 1):
     # round-robin first dongle
     hci = dongles[0] if dongles else None
     for _ in range(retries):
