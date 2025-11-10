@@ -1057,18 +1057,18 @@ def stop_subscriptions():
                 libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
             except Exception:
                 pass
-
-        try:
-            libmetawear.mbl_mw_acc_stop(b)
-            libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
-            libmetawear.mbl_mw_gyro_bmi270_stop(b)
-            libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
-            acc_signal  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
-            gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
-            libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
-            libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
-        except Exception:
-            pass
+        else:
+            try:
+                libmetawear.mbl_mw_acc_stop(b)
+                libmetawear.mbl_mw_acc_disable_acceleration_sampling(b)
+                libmetawear.mbl_mw_gyro_bmi270_stop(b)
+                libmetawear.mbl_mw_gyro_bmi270_disable_rotation_sampling(b)
+                acc_signal  = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
+                gyro_signal = libmetawear.mbl_mw_gyro_bmi270_get_rotation_data_signal(b)
+                libmetawear.mbl_mw_datasignal_unsubscribe(acc_signal)
+                libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
+            except Exception:
+                pass
     # quats
     for _, st in QuaternionSensors:
         try:
