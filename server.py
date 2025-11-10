@@ -623,15 +623,25 @@ async def handle_mode(ws, mode_value: str):
             sensors_payload = []
             for st in states:
                 mac = normalize_mac(st.device.address)
-                sensors_payload.append({
+                if len(st.acc_data_list) == 0 and len(st.gyro_data_list) == 0 and len(st.quat_data_list) == 0:
+                    continue
+                if len(st.acc_data_list) > 0 and len(st.gyro_data_list) > 0:
+                    sensors_payload.append({
+                     # each item: [host_iso, sensor_iso, x, y, z]
                     "mac": mac,
-                    "position": POSITION_BY_MAC.get(mac),
-                    "role": role_of_mac(mac),
-                   # each item: [host_iso, sensor_iso, x, y, z] or [host_iso, sensor_iso, w, x, y, z]
                     "acc":  list(st.acc_data_list),
-                    "gyro": list(st.gyro_data_list),
-                    "quat": list(st.quat_data_list),
-                })
+                    })
+                    sensors_payload.append({
+                        # each item: [host_iso, sensor_iso, x, y, z]
+                        "mac": mac,
+                        "gyro": list(st.gyro_data_list),
+                    })
+                if len(st.quat_data_list) > 0:
+                    sensors_payload.append({
+                        # each item: [host_iso, sensor_iso, w, x, y, z]
+                        "mac": mac,
+                        "quat": list(st.quat_data_list),
+                    })
             await ws.send(json.dumps({
                 "type": "raw_collection_dump",
                 "sensor_count": len(sensors_payload),
