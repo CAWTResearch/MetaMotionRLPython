@@ -619,7 +619,6 @@ async def handle_mode(ws, mode_value: str):
         if streaming_event.is_set():
             stop_streaming_now()
             await ws.send("STREAMING_STOPPED")
-
             sensors_payload = []
             for st in states:
                 mac = normalize_mac(st.device.address)
@@ -629,17 +628,20 @@ async def handle_mode(ws, mode_value: str):
                     sensors_payload.append({
                      # each item: [host_iso, sensor_iso, x, y, z]
                     "mac": mac,
+                    "role" : "acc",
                     "acc":  list(st.acc_data_list),
                     })
                     sensors_payload.append({
                         # each item: [host_iso, sensor_iso, x, y, z]
                         "mac": mac,
+                        "role" : "gyro",
                         "gyro": list(st.gyro_data_list),
                     })
                 if len(st.quat_data_list) > 0:
                     sensors_payload.append({
                         # each item: [host_iso, sensor_iso, w, x, y, z]
                         "mac": mac,
+                        "role" : "quat",
                         "quat": list(st.quat_data_list),
                     })
             await ws.send(json.dumps({
@@ -1314,9 +1316,6 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []   
-    global predicting
-    if predicting == False:
-        return
      
      # --- QUATERNIONS ---
     
