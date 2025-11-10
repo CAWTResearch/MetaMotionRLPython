@@ -637,6 +637,9 @@ async def handle_mode(ws, mode_value: str):
                 "sensor_count": len(sensors_payload),
                 "sensors": sensors_payload
             }))
+        else:
+            await ws.send("STREAMING_ALREADY_STOPPED")
+        return
 
     if mode in {"Standby", "Stop Streaming", "None"}:
         if streaming_event.is_set():
