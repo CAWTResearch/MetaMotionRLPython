@@ -605,6 +605,10 @@ async def handle_mode(ws, mode_value: str):
         predicting = False
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
+        for st in states:
+            st.acc_data_list.clear()
+            st.gyro_data_list.clear()
+            st.quat_data_list.clear()
         if start_streaming_now():
             await ws.send("STREAMING_STARTED")
             sample_log.clear()
@@ -616,11 +620,22 @@ async def handle_mode(ws, mode_value: str):
             stop_streaming_now()
             await ws.send("STREAMING_STOPPED")
 
-            # 1) OPTIONAL: keep samples JSON auto-download (your UI already handles it)
+            sensors_payload = []
+            for st in states:
+                mac = normalize_mac(st.device.address)
+                sensors_payload.append({
+                    "mac": mac,
+                    "position": POSITION_BY_MAC.get(mac),
+                    "role": role_of_mac(mac),
+                   # each item: [host_iso, sensor_iso, x, y, z] or [host_iso, sensor_iso, w, x, y, z]
+                    "acc":  list(st.acc_data_list),
+                    "gyro": list(st.gyro_data_list),
+                    "quat": list(st.quat_data_list),
+                })
             await ws.send(json.dumps({
                 "type": "raw_collection_dump",
-                "count": len(sample_log),
-                "data": list(sample_log)
+                "sensor_count": len(sensors_payload),
+                "sensors": sensors_payload
             }))
 
     if mode in {"Standby", "Stop Streaming", "None"}:
@@ -674,6 +689,17 @@ async def broadcast(obj):
         CONNECTED.discard(ws)
 
 POSITION_BY_MAC: Dict[str, str] = {}
+
+def role_of_mac(mac: str) -> str:
+    # infer from configured lists
+    mac = normalize_mac(mac)
+    for _, st in QuaternionSensors:
+        if normalize_mac(st.device.address) == mac:
+            return "quat"
+    for _, st in NormalSensors:
+        if normalize_mac(st.device.address) == mac:
+            return "normal"
+    return "unknown"
 
 def normalize_mac(mac: str) -> str:
     return (mac or "").strip().upper()
@@ -807,6 +833,10 @@ class State:
         self.quat_X = 0
         self.quat_Y = 0
         self.quat_Z = 0
+
+        self.acc_data_list  = []
+        self.gyro_data_list = []
+        self.quat_data_list = []
         
         self.time = datetime.datetime.now().strftime('%H:%M:%S.%f')
         
@@ -827,22 +857,44 @@ class State:
         self.quat_W, self.quat_X, self.quat_Y, self.quat_Z = val.w, val.x, val.y, val.z
         self.quat_count += 1
 
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).isoformat()
+        val = parse_value(data_ptr)
+        w, x, y, z = val.w, val.x, val.y, val.z
+        self.quat_data_list.append((host_time, sensor_time, w, x, y, z))
+
     def acc_data_handler(self, ctx, data_ptr):
 
-        host_time = datetime.datetime.now().timestamp()
+        host_time = datetime.datetime.now().isoformat()
         val = parse_value(data_ptr)
         self.acc_deque.append((val.x, val.y, val.z))
         self.acc_X, self.acc_Y, self.acc_Z = val.x, val.y, val.z
         self.acc_count += 1
 
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).isoformat()
+        val = parse_value(data_ptr)
+        x, y, z = val.x, val.y, val.z
+
+        # 4) append to in-memory list
+        self.acc_data_list.append((host_time, sensor_time, x, y, z))
 
     def gyro_data_handler(self, ctx, data_ptr):
 
-        host_time = datetime.datetime.now().timestamp()
+        host_time = datetime.datetime.now().isoformat()
         val = parse_value(data_ptr)
         self.gyro_deque.append((val.x, val.y, val.z))
         self.gyro_X, self.gyro_Y, self.gyro_Z = val.x, val.y, val.z
         self.gyro_count += 1
+
+        sensor_time = datetime.datetime.fromtimestamp(
+            data_ptr.contents.epoch / 1000.0
+        ).isoformat()
+        val = parse_value(data_ptr)
+        x, y, z = val.x, val.y, val.z
+        self.gyro_data_list.append((host_time, sensor_time, x, y, z))
 
 
     def get_acc_cb(self):
@@ -1249,6 +1301,11 @@ class CNN_LSTM_Sensor(nn.Module):
 
 def CombineData():
     data = []   
+    global predicting
+    if predicting == False:
+        return
+     
+     # --- QUATERNIONS ---
     
     for name, st in QuaternionSensors:
         # --- QUAT ---
