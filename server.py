@@ -590,7 +590,7 @@ async def handle_mode(ws, mode_value: str):
     if mode == "Start Streaming":
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
-        if start_streaming_now():
+        if connected_sensors == 6 and start_streaming_now():
             await ws.send("STREAMING_STARTED")
             predictions_log.clear()
             sample_log.clear()
@@ -710,6 +710,8 @@ def start_streaming_now() -> bool:
         return False
     with config_lock:
         print("[MODE] starting streaming...", flush=True)
+        global offset
+        offset = 0
         buffer.clear()
         global combinecounter
         combinecounter = 0
@@ -1251,6 +1253,7 @@ def CombineData():
             ax1, ay1, az1,
             gx1, gy1, gz1
         ]
+    global offset
     if offset < 10:
         offset +=1
         return
