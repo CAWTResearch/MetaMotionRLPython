@@ -1071,6 +1071,7 @@ def stop_subscriptions():
                 pass
     # quats
     for _, st in QuaternionSensors:
+        b = st.device.board
         try:
             signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(b, SensorFusionData.QUATERNION)
             libmetawear.mbl_mw_sensor_fusion_stop(b)
@@ -1253,11 +1254,11 @@ def CombineData():
             gx1, gy1, gz1
         ]
     global offset
-    if offset < 10:
+    if offset < 50:
         offset +=1
         return
     buffer.append(data)  
-    ts = [datetime.datetime.now().timestamp()]
+    ts = [datetime.datetime.now().isoformat()]
     sample_log.append(ts + list(data))
     # return data
     return
@@ -1276,7 +1277,7 @@ def get_prediction(model):
 
             print(f"Predicción: {prediction}, Probabilidades: {probabilities}")
 
-            c_time = time.time()
+            c_time = [datetime.datetime.now().isoformat()]
             if WS_LOOP is not None:
                 payload = {
                     "type": "prediction",
