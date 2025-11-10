@@ -995,11 +995,9 @@ def configure_sensors(states_list: List["State"],
     print(f"{len(states_list)} states; configured {cfg_normals} normals + {cfg_quats} quats")
 
 def subscribe_sensors():
-    for Sensor in NormalSensors:
-        st = Sensor[1]
-        b = Sensor[1].device.board
-
-        if Sensor[1].device.address in OLD_SENSORS:
+    for _, st in NormalSensors:
+        b = st.device.board
+        if st.device.address in OLD_SENSORS:
             # get acc signal and subscribe
             acc = libmetawear.mbl_mw_acc_get_acceleration_data_signal(b)
             libmetawear.mbl_mw_datasignal_subscribe(acc, None, st.get_acc_cb())
@@ -1034,9 +1032,8 @@ def subscribe_sensors():
 
             libmetawear.mbl_mw_gyro_bmi270_start(b)
 
-    for Sensor in QuaternionSensors:
-        st = Sensor[1]
-
+    for _, st in QuaternionSensors:
+        b = st.device.board
         signal_quat = libmetawear.mbl_mw_sensor_fusion_get_data_signal(b, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_datasignal_subscribe(signal_quat, None, st.get_quaternion_cb())
         libmetawear.mbl_mw_sensor_fusion_enable_data(b, SensorFusionData.QUATERNION)
