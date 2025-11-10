@@ -207,7 +207,7 @@ def iter_samples_rows_snapshot():
 def iter_predictions_rows_snapshot():
     snap = list(predictions_log)
     for r in snap:
-        ts_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(r["ts"]))
+        ts_iso = r["ts"]
         probs = (r.get("probabilities") or [])
         probs = list(probs[:6]) + [""] * max(0, 6 - len(probs))
         yield [ts_iso, f'{r["ts"]:.6f}', r["prediction"], *probs]
