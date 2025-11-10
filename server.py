@@ -125,6 +125,7 @@ lstm_layers=2
 output_dim=6
 connected_sensors = 0
 offset = 0
+predicting = False
 
 e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
@@ -206,6 +207,7 @@ def iter_samples_rows_snapshot():
 
 def iter_predictions_rows_snapshot():
     snap = list(predictions_log)
+
     for r in snap:
         ts_iso = r["ts"]
         probs = (r.get("probabilities") or [])
@@ -433,19 +435,6 @@ async def server(ws):
                 await ws.send(json.dumps({"type":"upload_done"}))
                 continue
 
-            if payload and payload.get("action") == "get_predictions":
-                await ws.send(json.dumps({
-                    "type": "predictions_dump",
-                    "count": len(predictions_log),
-                    "data": list(predictions_log),
-                }))
-                await ws.send(json.dumps({
-                    "type": "sample_dump",
-                    "count": len(sample_log),
-                    "data":  list(sample_log)
-                }))
-                continue
-
             # ---- Calibration trigger (single device) ----
             if payload and payload.get("action") == "calibrate":
                 target_mac = normalize_mac(payload.get("mac", ""))
@@ -587,21 +576,46 @@ def mode(message):
 async def handle_mode(ws, mode_value: str):
     mode = normalize_mode(mode_value)
     print(f"[MODE] selected={mode}", flush=True)
+    global connected_sensors
+    global predicting
 
     if mode == "Start Streaming":
-        global connected_sensors
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
         if connected_sensors == 6 and start_streaming_now():
+            predicting = True
             await ws.send("STREAMING_STARTED")
             predictions_log.clear()
             sample_log.clear()
         else:
             await ws.send("NOT_CONFIGURED")
         return
+    
+    if mode == "Start Collecting":
+        predicting = False
+        if streaming_event.is_set():
+            await ws.send("STREAMING_ALREADY_STARTED"); return
+        if start_streaming_now():
+            await ws.send("STREAMING_STARTED")
+            sample_log.clear()
+        else:
+            await ws.send("NOT_CONFIGURED")
+        return
+    if mode == "Stop Collecting":
+        if streaming_event.is_set():
+            stop_streaming_now()
+            await ws.send("STREAMING_STOPPED")
+
+            # 1) OPTIONAL: keep samples JSON auto-download (your UI already handles it)
+            await ws.send(json.dumps({
+                "type": "raw_collection_dump",
+                "count": len(sample_log),
+                "data": list(sample_log)
+            }))
 
     if mode in {"Standby", "Stop Streaming", "None"}:
         if streaming_event.is_set():
+            predicting = False
             stop_streaming_now()
             await ws.send("STREAMING_STOPPED")
 
@@ -1264,8 +1278,9 @@ def CombineData():
     return
 
 def get_prediction(model):
+    global predicting
     while True:
-        if (len(buffer)>=50 and combinecounter>=25):
+        if (len(buffer)>=50 and combinecounter>=25 and predicting):
             predicted_event.set()
             print(combinecounter)
             data_tensor = preprocess_data(buffer, scaler)
