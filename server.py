@@ -528,6 +528,7 @@ async def server(ws):
 
                     force_disconnect_sensors()
                     await ws.send('"CONNECTING_SENSORS"')
+                    global connected_sensors
                     connected_sensors = 0
                     connect_sensors(deviceMacs, dongle_macs)
 
@@ -588,6 +589,7 @@ async def handle_mode(ws, mode_value: str):
     print(f"[MODE] selected={mode}", flush=True)
 
     if mode == "Start Streaming":
+        global connected_sensors
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
         if connected_sensors == 6 and start_streaming_now():
