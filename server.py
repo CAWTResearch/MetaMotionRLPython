@@ -132,24 +132,27 @@ e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
 
 POSITIONS = [
-    'Chest-left', 'Chest-right',
-    'Arm-left', 'Arm-right',
-    'Knee-left', 'Knee-right',
-    'Arm-left2', 'Arm-right2',
-    'Knee-left2', 'Knee-right2',
+    'Chest-left:ACC/GYRO', 'Chest-right:QUAT',
+    'Arm-left:ACC/GYRO', 'Arm-right:QUAT',
+    'Knee-left:ACC/GYRO', 'Knee-right:QUAT',
+    'Arm-left:QUAT', 'Arm-right:ACC/GYRO',
+    'Knee-left:QUAT', 'Knee-right:ACC/GYRO',
+    'Head:ACC/GYRO', 'Head:QUAT',
 ]
 
 ROLE_BY_POSITION = {
-    'Chest-left':  'normal',
-    'Chest-right': 'quat',
-    'Arm-left':    'normal',
-    'Arm-right':   'quat',
-    'Knee-left':   'normal',
-    'Knee-right':  'quat',
-    'Arm-left2':  'quat',
-    'Arm-right2': 'normal',
-    'Knee-left2': 'quat',
-    'Knee-right2': 'normal',
+    'Chest-left:ACC/GYRO':  'normal',
+    'Chest-right:QUAT': 'quat',
+    'Arm-left:ACC/GYRO':    'normal',
+    'Arm-right:QUAT':   'quat',
+    'Knee-left:ACC/GYRO':   'normal',
+    'Knee-right:QUAT':  'quat',
+    'Arm-left:QUAT':  'quat',
+    'Arm-right:ACC/GYRO': 'normal',
+    'Knee-left:QUAT': 'quat',
+    'Knee-right:ACC/GYRO': 'normal',
+    'Head:ACC/GYRO':    'normal',
+    'Head:QUAT':    'quat',
 }
 
 OLD_SENSORS = {
