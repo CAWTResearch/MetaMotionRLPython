@@ -554,7 +554,6 @@ async def server(ws):
                     print("Mode found!")
                     await handle_mode(ws, candidate)
                     continue
-            await ws.send('"MAPPING_APPLIED"')
 
             if payload and (
                 payload.get("action") == "set_mapping" or any(k in POSITIONS for k in payload.keys())
@@ -585,7 +584,7 @@ async def server(ws):
                     deviceMacs[:] = macs
 
                     force_disconnect_sensors()
-                    await ws.send('"CONNECTING_SENSORS"')
+                    await ws.send(json.dumps({"type": "CONNECTING_SENSORS"}))
                     global connected_sensors
                     connected_sensors = 0
                     connect_sensors(deviceMacs, dongle_macs)
