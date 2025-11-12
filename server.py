@@ -26,6 +26,7 @@ import time, json, asyncio
 import os
 import ctypes
 from time import sleep
+import shlex
 
 
 from googleapiclient.discovery import build
@@ -243,6 +244,43 @@ def detect_dongle_macs() -> List[str]:
             ordered.append(mac)
     print(ordered)
     return ordered
+
+META_PATTERNS = ("METAMOTION", "METAWEAR", "MMS", "MMR", "MTR")
+
+def _btctl(cmd: str) -> str:
+    res = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
+    return (res.stdout or "") + (res.stderr or "")
+
+def scan_ble_devices(timeout_s: int = 7):
+    """Return [{"mac": "...", "name": "...", "rssi": int|None}, ...] for MetaWear/MetaMotion-like names."""
+    _btctl(f"bluetoothctl --timeout {timeout_s} scan on")
+    devices_txt = _btctl("bluetoothctl devices")
+
+    out = []
+    for line in devices_txt.splitlines():
+        # "Device F1:1E:E2:6F:1D:E1 MetaWear"
+        parts = line.strip().split(" ", 2)
+        if len(parts) < 3 or parts[0] != "Device":
+            continue
+        mac, name = parts[1].upper().strip(), parts[2].strip()
+        if name and any(pat in name.upper() for pat in META_PATTERNS):
+            info_txt = _btctl(f"bluetoothctl info {mac}")
+            rssi = None
+            for il in info_txt.splitlines():
+                il = il.strip()
+                if il.startswith("RSSI:"):
+                    try:
+                        rssi = int(il.split(":", 1)[1].strip())
+                    except:
+                        rssi = None
+                    break
+            out.append({"mac": mac, "name": name, "rssi": rssi})
+    # de-dupe by mac
+    seen = set(); uniq = []
+    for d in out:
+        if d["mac"] in seen: continue
+        seen.add(d["mac"]); uniq.append(d)
+    return uniq
 
 dongle_macs = detect_dongle_macs()
 if not dongle_macs:
@@ -487,6 +525,24 @@ async def server(ws):
             if payload and payload.get("action") == "Stop Collecting":
                 await handle_mode(ws, "Stop Collecting")
                 await ws.send(json.dumps({"type":"collection_status","collecting":"COLLECTION_STOPPED"}))
+                continue
+
+            # ---- BLE discovery (server-driven) ----
+            if payload and payload.get("action") == "scan":
+                await ws.send(json.dumps({"type": "scan_begin"}))
+                try:
+                    found = scan_ble_devices(timeout_s=7)
+                except Exception as e:
+                    await ws.send(json.dumps({"type": "error", "message": f"scan_failed:{e}"}))
+                    found = []
+                await ws.send(json.dumps({
+                    "type": "scan_result",
+                    "devices": found,  # [{mac,name,rssi?}]
+                    "count": len(found)
+                }))
+                # Optional: remember names in your existing maps if you keep one
+                for d in found:
+                    POSITION_BY_MAC.setdefault(d["mac"], None)
                 continue
 
             if isinstance(raw, str):
