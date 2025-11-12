@@ -127,7 +127,6 @@ output_dim=6
 connected_sensors = 0
 offset = 0
 predicting = False
-debug = True
 
 e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
@@ -471,7 +470,6 @@ async def server(ws):
         async for raw in ws:
             print(f"{raw[:120]}...", flush=True)  # trim for sanity
             payload = try_parse_json(raw)
-            global debug
 
             if payload and payload.get("action") == "upload":
                 upload_all_files()
@@ -514,13 +512,7 @@ async def server(ws):
                     await ws.send(json.dumps({"type":"calib_result","mac":st.device.address,"ok": True}))
                 continue
 
-            if payload and payload.get("action") == "disconnect_all":
-                debug = False
-                await handle_disconnect_all(ws)
-                continue
-
             if payload and payload.get("action") == "disconnect_reboot_all":
-                debug = True
                 await handle_disconnect_all(ws)
                 continue
 
@@ -1280,17 +1272,15 @@ def disconnect_sensors():
     
         libmetawear.mbl_mw_datasignal_unsubscribe(gyro_signal)
         
-    global debug
-    if debug:
-        for st in states:
-            b = st.device.board
+    for st in states:
+        b = st.device.board
 
-            # 5) Finally, disconnect over BLE
-            libmetawear.mbl_mw_debug_disconnect(b)
+        # 5) Finally, disconnect over BLE
+        try: libmetawear.mbl_mw_debug_disconnect(b)
+        except: pass
 
-            # Give the board a moment to process each step
-            time.sleep(1.0)
-    debug = True
+        # Give the board a moment to process each step
+        time.sleep(1.0)
 
 def reconfigure_and_subscribe(st, retries=5, backoff=1.0):
     # BlueZ will call this on disconnect; immediately spin off a thread
@@ -1328,8 +1318,6 @@ def _do_reconnect(st, retries, backoff):
 async def handle_disconnect_all(ws):
     with config_lock:
         try:
-            global debug
-            debug = True
             streaming_event.clear()
             stop_subscriptions()
             disconnect_sensors()
