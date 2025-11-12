@@ -705,7 +705,7 @@ async def handle_mode(ws, mode_value: str):
                     })
             await ws.send(json.dumps({
                 "type": "raw_collection_dump",
-                "sensor_count": len(sensors_payload),
+                "file_count": len(sensors_payload),
                 "sensors": sensors_payload
             }))
         else:
