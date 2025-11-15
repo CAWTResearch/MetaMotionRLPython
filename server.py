@@ -34,28 +34,28 @@ from google.oauth2 import service_account
 from googleapiclient.http import MediaFileUpload
 from pathlib import Path
 
-SCOPES = ['https://www.googleapis.com/auth/drive']
+SCOPES = ['https://www.googleapis.com/auth/drive'] # Will probably be deleted after testing
 SERVICE_ACCOUNT_FILE = 'DriveUpload/service_account.json'
 
 
-ParentFolder = "RealTimeTesting Predictions"
+ParentFolder = "RealTimeTesting Predictions" # Will probably be deleted after testing
 
-folders_ID = {"Yahid": "1BVlVORstArc-x2uptACGK1vqFcks5SCW", 
+folders_ID = {"Yahid": "1BVlVORstArc-x2uptACGK1vqFcks5SCW",  # Will probably be deleted after testing
               "Angel": "18KIELRL5BBtaBpIirm9wc1DhOnkM3W8B",
               "RealTimeTesting Predictions": "1gkEMBR54HxqMs806p1jvURIYh7wUjzwj",
               "CAWT_DATA": "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
               }
 
-PARENT_FOLDER_ID = folders_ID[ParentFolder]
+PARENT_FOLDER_ID = folders_ID[ParentFolder] # Will probably be deleted after testing
 
-LOCAL_DIR = Path("DriveUpload")  
-DEFAULT_SUBFOLDER_NAME = f"upload_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}"
+LOCAL_DIR = Path("DriveUpload")  # Will probably be deleted after testing
+DEFAULT_SUBFOLDER_NAME = f"upload_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}" # Will probably be deleted after testing
 
-def authenticate():
+def authenticate(): # Will probably be deleted after testing
     creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return creds
 
-def create_subfolder(service, name, parent_id):
+def create_subfolder(service, name, parent_id): # Will probably be deleted after testing
     file_metadata = {
         'name': name,
         'mimeType': 'application/vnd.google-apps.folder',
@@ -64,7 +64,7 @@ def create_subfolder(service, name, parent_id):
     folder = service.files().create(body=file_metadata, fields='id').execute()
     return folder.get('id')
 
-def upload_file(service, file_path, folder_id):
+def upload_file(service, file_path, folder_id): # Will probably be deleted after testing
     file_metadata = {'name': Path(file_path).name, 'parents': [folder_id]}
     media = MediaFileUpload(str(file_path), mimetype='text/csv', resumable=False)
 
@@ -75,7 +75,7 @@ def upload_file(service, file_path, folder_id):
     ).execute()
 
 
-def upload_all_files(subfolder_name: str = DEFAULT_SUBFOLDER_NAME, local_dir: Path = LOCAL_DIR):
+def upload_all_files(subfolder_name: str = DEFAULT_SUBFOLDER_NAME, local_dir: Path = LOCAL_DIR): # Will probably be deleted after testing
     if not local_dir.exists():
         raise FileNotFoundError(f"Local folder not found: {local_dir.resolve()}")
     
@@ -103,35 +103,38 @@ WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
 CalibrationDataP = ctypes.POINTER(CalibrationData)
 
 states: List["State"] = []
-NormalSensors: List[Tuple[str, "State"]] = []
-QuaternionSensors: List[Tuple[str, "State"]] = []
+NormalSensors: List[Tuple[str, "State"]] = [] #List containing tuples of (position, State) for normal sensors
+QuaternionSensors: List[Tuple[str, "State"]] = [] #List containing tuples of (position, State) for quaternion sensors
 
-deviceMacs: List[str] = [] 
+deviceMacs: List[str] = []  #List of device MAC addresses to connect to
 config_lock = Lock()
 
-streaming_event = Event()     
-configured_event = Event()   
+streaming_event = Event() # Indicates if streaming is active
+configured_event = Event()   # Indicates if sensors have been configured
 
-ALLOWED_MODES = {"Start Streaming", "Standby", "Stop Streaming", "None", "Calibration", "Diagnostics"}
+ALLOWED_MODES = {"Start Streaming", "Standby", "Stop Streaming", "None", "Calibration", "Diagnostics"} #Allowed operation modes
 
-buffer = deque(maxlen=50)
-predictions_log = deque(maxlen=100000)
-sample_log = deque(maxlen=2500000)
-combinecounter = 0
-predicted_event = Event()
+buffer = deque(maxlen=50) #Buffer to hold incoming data for predictions
+predictions_log = deque(maxlen=100000) #Log to hold prediction results
+sample_log = deque(maxlen=2500000) #Log to hold raw sample data
+combinecounter = 0 #Counter to track combined data frames
+predicted_event = Event() #Event to signal when a prediction has been made
+
+# Model parameters
 input_dim=30 
 cnn_out_channels=256
 lstm_hidden=256
 lstm_layers=2 
 output_dim=6
-connected_sensors = 0
-offset = 0
-predicting = False
+
+connected_sensors = 0 #Number of successfully connected sensors
+offset = 0 #Skips the first N samples to allow sensors to stabilize
+predicting = False #Indicates if predictions are being made
 
 e = Event()
 CALIB_IN_PROGRESS: Optional[asyncio.Lock] = None
 
-POSITIONS = [
+POSITIONS = [ # Defined sensor positions
     'Chest-left:ACC/GYRO', 'Chest-right:QUAT',
     'Arm-left:ACC/GYRO', 'Arm-right:QUAT',
     'Knee-left:ACC/GYRO', 'Knee-right:QUAT',
@@ -140,7 +143,7 @@ POSITIONS = [
     'Head:ACC/GYRO', 'Head:QUAT',
 ]
 
-ROLE_BY_POSITION = {
+ROLE_BY_POSITION = { # Mapping of sensor positions to their roles
     'Chest-left:ACC/GYRO':  'normal',
     'Chest-right:QUAT': 'quat',
     'Arm-left:ACC/GYRO':    'normal',
@@ -155,7 +158,7 @@ ROLE_BY_POSITION = {
     'Head:QUAT':    'quat',
 }
 
-OLD_SENSORS = {
+OLD_SENSORS = { # List of old sensor MAC addresses to change set up accordingly
     "F1:1E:E2:6F:1D:E1",
     "EE:1B:72:FA:BF:E8",
     "F9:8C:1E:4A:F5:D0",
@@ -164,7 +167,7 @@ OLD_SENSORS = {
     "CE:94:48:FE:5D:C5"
 }
 
-profiles = [
+profiles = [ # Predefined sensor profiles (There must be 1 per sensor connected)
     {"interval":8.75, "latency":0, "timeout":10000},
     {"interval":10.0, "latency":0, "timeout":10000},
     {"interval":11.25, "latency":0, "timeout":10000},
@@ -175,11 +178,15 @@ profiles = [
     {"interval":17.5, "latency":0, "timeout":10000},
     {"interval":18.75, "latency":0, "timeout":10000},
     {"interval":20, "latency":0, "timeout":10000},
+    {"interval":21.25, "latency":0, "timeout":10000},
+    {"interval":22.5, "latency":0, "timeout":10000},
 ]
-
+# Calibration storage directory
 CALIB_DIR = "calibration"
+# Ensure calibration directory exists
 os.makedirs(CALIB_DIR, exist_ok=True)
 
+# The calibration blob path for a given MAC. This allows storing/loading calibration data.
 def _calib_path(mac: str) -> str:
     mac_s = (mac or "unknown").replace(":", "-").upper()
     return os.path.join(CALIB_DIR, f"{mac_s}.bin")
@@ -204,11 +211,13 @@ def apply_calibration_blob(board, blob: bytes) -> bool:
     )
     return True
 
+# Generator functions to yield rows for samples and predictions logs
 def iter_samples_rows_snapshot():
     snap = list(sample_log)
     for i, data in enumerate(snap):
         yield [i, *data]
 
+# Generator function to yield rows for predictions log
 def iter_predictions_rows_snapshot():
     snap = list(predictions_log)
 
@@ -218,6 +227,7 @@ def iter_predictions_rows_snapshot():
         probs = list(probs[:6]) + [""] * max(0, 6 - len(probs))
         yield [ts_iso, f'{r["ts"]:.6f}', r["prediction"], *probs]
 
+# Detect available Bluetooth dongle MAC addresses
 def detect_dongle_macs() -> List[str]:
     macs_by_hci: List[Tuple[int, str]] = []
     # --- Try hcitool dev ---
@@ -248,12 +258,15 @@ def detect_dongle_macs() -> List[str]:
     print(ordered)
     return ordered
 
+# Patterns to identify MetaWear/MetaMotion devices
 META_PATTERNS = ("METAMOTION", "METAWEAR", "MMS", "MMR", "MTR")
 
+# Run a bluetoothctl command and return its output
 def _btctl(cmd: str) -> str:
     res = subprocess.run(shlex.split(cmd), capture_output=True, text=True)
     return (res.stdout or "") + (res.stderr or "")
 
+# Scan for BLE devices with MetaWear/MetaMotion-like names
 def scan_ble_devices(timeout_s: int = 7):
     """Return [{"mac": "...", "name": "...", "rssi": int|None}, ...] for MetaWear/MetaMotion-like names."""
     _btctl(f"bluetoothctl --timeout {timeout_s} scan on")
@@ -289,6 +302,7 @@ dongle_macs = detect_dongle_macs()
 if not dongle_macs:
     print("[WARN] No Bluetooth adapters detected via hcitool or bluetoothctl; connections may fail.")
 
+# Try to parse a JSON object from a raw string
 def try_parse_json(raw: str):
 
     if not isinstance(raw, str):
@@ -309,6 +323,7 @@ def try_parse_json(raw: str):
 
     return obj if isinstance(obj, dict) else None
 
+# Find an existing State by MAC address
 def find_state_by_mac(mac: str):
     mac_n = normalize_mac(mac)
     for st in states:
@@ -316,7 +331,8 @@ def find_state_by_mac(mac: str):
             return st
     return None
 
-def connect_single(mac: str, dongles: list[str], retries: int = 1):
+# Connect to a single MetaWear device by MAC using available dongles (Useful for calibration)
+def connect_single(mac: str, dongles: list[str], retries: int = 3):
     # round-robin first dongle
     hci = dongles[0] if dongles else None
     for _ in range(retries):
@@ -334,6 +350,7 @@ def connect_single(mac: str, dongles: list[str], retries: int = 1):
             time.sleep(2)
     return None
 
+# Calibrate a quaternion MetaWear device over WebSocket
 async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeout_s: float = 180.0):
     loop = asyncio.get_running_loop()
     done_evt = asyncio.Event()
@@ -462,7 +479,7 @@ async def calibrate_quat_device(ws, st, *, disconnect_after: bool = True, timeou
 
     await ws.send(json.dumps({"type":"calib_done","mac":mac,"ok": not timed_out}))
 
-
+# WebSocket server handler
 async def server(ws):
     print("Client connected", flush=True)
     CONNECTED.add(ws)
@@ -633,20 +650,14 @@ async def server(ws):
     finally:
         CONNECTED.discard(ws)
 
-def mode(message):
-    modes = {'"Standby"': 0,
-             '"Start Streaming"': 1, '"Calibration"': 2, '"Diagnostics"': 3}
-    if not message in modes:
-        return str(-1)
-
-    return str(modes[message])
-
+# Normalize mode strings to standard forms
 async def handle_mode(ws, mode_value: str):
     mode = normalize_mode(mode_value)
     print(f"[MODE] selected={mode}", flush=True)
     global connected_sensors
-    global predicting
+    global predicting   
 
+    # Handle different modes
     if mode == "Start Streaming":
         if streaming_event.is_set():
             await ws.send("STREAMING_ALREADY_STARTED"); return
@@ -717,7 +728,6 @@ async def handle_mode(ws, mode_value: str):
             stop_streaming_now()
             await ws.send("STREAMING_STOPPED")
 
-            # 1) OPTIONAL: keep predictions JSON auto-download (your UI already handles it)
             await ws.send(json.dumps({
                 "type": "predictions_dump",
                 "count": len(predictions_log),
@@ -741,6 +751,7 @@ async def handle_mode(ws, mode_value: str):
         return
     await ws.send("UNKNOWN_MODE")
 
+# Start the WebSocket server
 async def start_ws_server():
     global WS_LOOP, CALIB_IN_PROGRESS
     WS_LOOP = asyncio.get_running_loop()
@@ -750,6 +761,7 @@ async def start_ws_server():
         print("Server listening on 0.0.0.0:8765")
         await asyncio.Future()  # run forever
     
+# Broadcast a JSON object to all connected WebSocket clients
 async def broadcast(obj):
     msg = json.dumps(obj, separators=(",", ":"))
     dead = []
@@ -763,20 +775,11 @@ async def broadcast(obj):
 
 POSITION_BY_MAC: Dict[str, str] = {}
 
-def role_of_mac(mac: str) -> str:
-    # infer from configured lists
-    mac = normalize_mac(mac)
-    for _, st in QuaternionSensors:
-        if normalize_mac(st.device.address) == mac:
-            return "quat"
-    for _, st in NormalSensors:
-        if normalize_mac(st.device.address) == mac:
-            return "normal"
-    return "unknown"
-
+# Normalize MAC address strings
 def normalize_mac(mac: str) -> str:
     return (mac or "").strip().upper()
 
+# Create a plan from a mapping of positions to MAC addresses
 def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
     print("Received mapping!", flush=True)
     selected: List[Tuple[str, str]] = []
@@ -808,6 +811,7 @@ def plan_from_mapping(mapping: Dict[str, str]) -> Dict[str, Any]:
         "device_macs": device_macs,
     }
 
+# Normalize mode strings to a standard form
 def normalize_mode(s: str) -> str:
     if not isinstance(s, str):
         return ""
@@ -828,7 +832,7 @@ def normalize_mode(s: str) -> str:
 
     return t
 
-
+# Start streaming data now
 def start_streaming_now() -> bool:
     if not configured_event.is_set():
         print("[MODE] start requested but NOT_CONFIGURED", flush=True)
@@ -844,7 +848,7 @@ def start_streaming_now() -> bool:
         streaming_event.set()
     return True
 
-
+# Stop streaming data now
 def stop_streaming_now() -> bool:
     with config_lock:
         print("[MODE] stopping streaming...", flush=True)
@@ -856,6 +860,7 @@ def stop_streaming_now() -> bool:
         predicted_event.clear()
     return True
 
+# Preprocess data buffer for model input
 def preprocess_data(buffer, scaler):
     data_np = np.array(buffer)  # shape (N, 30)
 
@@ -865,6 +870,7 @@ def preprocess_data(buffer, scaler):
     tensor = torch.tensor(scaled, dtype=torch.float32).unsqueeze(0)  # (1, N, 30)
     return tensor
 
+# Force disconnect all connected sensors before reconnecting
 def force_disconnect_sensors():
     try:
         result = subprocess.run(["hcitool", "dev"], capture_output=True, text=True)
@@ -883,7 +889,7 @@ def force_disconnect_sensors():
     except Exception:
         pass
 
-# Clase de estado para escribir CSV directamente en callbacks
+# State class to manage sensor data and callbacks
 
 class State:
 
@@ -1014,12 +1020,14 @@ class State:
         self._gyro_fh.close()
         self._quat_fh.close()
 
+# Assign sensors to dongles in a round-robin fashion
 def assign_sensors_to_dongles(devices, dongles):
     assign = {d:[] for d in dongles}
     for i, mac in enumerate(devices):
         assign[dongles[i % len(dongles)]].append(mac)
     return assign
 
+# Connect to sensors using available dongles
 def connect_sensors(devices, dongles, retries=3):
     for dongle, devs in assign_sensors_to_dongles(devices, dongles).items():
         for mac in devs:
@@ -1040,6 +1048,7 @@ def connect_sensors(devices, dongles, retries=3):
                     time.sleep(3)
     return states
 
+# Configure normal sensors
 def configureNormal(st: "State", name: str):
     b = st.device.board
     settings = st.profile
@@ -1079,6 +1088,7 @@ def configureNormal(st: "State", name: str):
         NormalSensors.append((name, st))
         time.sleep(0.3)
 
+# Configure quaternion sensors
 def configureQuaternions(st: "State", name: str):
     d = st.device
     b = st.device.board
@@ -1114,6 +1124,7 @@ def configureQuaternions(st: "State", name: str):
     QuaternionSensors.append((name, st))
     time.sleep(0.3)
 
+# Configure sensors based on their MAC addresses
 def configure_sensors(states_list: List["State"],
                       quats: List[Tuple[str, str]],
                       normals: List[Tuple[str, str]]):
@@ -1145,6 +1156,7 @@ def configure_sensors(states_list: List["State"],
 
     print(f"{len(states_list)} states; configured {cfg_normals} normals + {cfg_quats} quats")
 
+# Subscribe to sensor data signals once streaming starts
 def subscribe_sensors():
     for _, st in NormalSensors:
         b = st.device.board
@@ -1190,6 +1202,7 @@ def subscribe_sensors():
         libmetawear.mbl_mw_sensor_fusion_enable_data(b, SensorFusionData.QUATERNION)
         libmetawear.mbl_mw_sensor_fusion_start(b)
 
+# Stop subscriptions to sensor data signals once streaming stops
 def stop_subscriptions():
     # normals
     for _, st in NormalSensors:
@@ -1228,6 +1241,7 @@ def stop_subscriptions():
         except Exception:
             pass
 
+# Disconnect all sensors cleanly
 def disconnect_sensors():
     if not states:
         return
@@ -1281,10 +1295,12 @@ def disconnect_sensors():
         # Give the board a moment to process each step
         time.sleep(1.0)
 
+# Reconfigure and resubscribe on disconnect
 def reconfigure_and_subscribe(st, retries=5, backoff=1.0):
     # BlueZ will call this on disconnect; immediately spin off a thread
     threading.Thread(target=_do_reconnect, args=(st, retries, backoff), daemon=True).start()
 
+# Attempt to reconnect to a sensor with retries and backoff
 def _do_reconnect(st, retries, backoff):
     dev     = st.device
     # 1) One big board‐side reset clears out all streams & subscriptions
@@ -1299,10 +1315,10 @@ def _do_reconnect(st, retries, backoff):
     while dev.is_connected and time.time() < timeout:
         time.sleep(0.05)
 
-    # 3) Give BlueZ another moment
+    # 2) Give BlueZ another moment
     time.sleep(backoff)
 
-    # 4) Retry connect() up to `retries` times
+    # 3) Retry connect() up to `retries` times
     for i in range(1, retries+1):
         try:
             dev.connect()
@@ -1314,6 +1330,7 @@ def _do_reconnect(st, retries, backoff):
     else:
         return
     
+# Handle disconnecting all sensors and clearing state
 async def handle_disconnect_all(ws):
     with config_lock:
         try:
@@ -1330,6 +1347,7 @@ async def handle_disconnect_all(ws):
             configured_event.clear()
     await ws.send(json.dumps({"type":"status","status":"DISCONNECTED_ALL"}))
 
+# CNN-LSTM model definition
 class CNN_LSTM_Sensor(nn.Module):
     def __init__(self, input_dim, cnn_out_channels, lstm_hidden, lstm_layers, output_dim):
         super(CNN_LSTM_Sensor, self).__init__()
@@ -1373,6 +1391,7 @@ class CNN_LSTM_Sensor(nn.Module):
         x = lstm_out[:, -1, :]   # Last time step
         return self.fc(x)
 
+# Combine data from sensors into a single buffer in order to feed into the model
 def CombineData():
     data = []   
      
@@ -1415,6 +1434,7 @@ def CombineData():
     # return data
     return
 
+# Prediction thread function
 def get_prediction(model):
     global predicting
     while True:
@@ -1447,6 +1467,7 @@ def get_prediction(model):
         else:
             time.sleep(0.002)
 
+# Main entry point
 if __name__ == "__main__":
     print("Starting server...")
     # Load model & scaler up front
