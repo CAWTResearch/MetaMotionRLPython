@@ -1058,13 +1058,15 @@ def configureNormal(st: "State", name: str):
         libmetawear.mbl_mw_settings_set_connection_parameters(
             b, settings["interval"], settings["interval"], settings["latency"], settings["timeout"]
         )
-        sleep(1.5)
+        time.sleep(1.0)
+        libmetawear.mbl_mw_settings_set_tx_power(b, 4)
+        time.sleep(0.5)
         libmetawear.mbl_mw_acc_bmi160_set_odr(b, AccBmi160Odr._100Hz) # BMI 160 specific call
-        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._4G)
+        libmetawear.mbl_mw_acc_bosch_set_range(b, AccBoschRange._16G)
         libmetawear.mbl_mw_acc_write_acceleration_config(b)
 
         # config gyro
-        libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._1000dps)
+        libmetawear.mbl_mw_gyro_bmi160_set_range(b, GyroBoschRange._2000dps)
         libmetawear.mbl_mw_gyro_bmi160_set_odr(b, GyroBoschOdr._100Hz)
         libmetawear.mbl_mw_gyro_bmi160_write_config(b)
         NormalSensors.append((name, st))
