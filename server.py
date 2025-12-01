@@ -1346,87 +1346,61 @@ class CNN_LSTM_Sensor(nn.Module):
         x = lstm_out[:, -1, :]   # Last time step
         return self.fc(x)
 
-# # Combine data from sensors into a single buffer in order to feed into the model
-# def _build_position_map():
-#     """
-#     Build a mapping: position string -> State
-#     using the configured QuaternionSensors and NormalSensors.
-#     """
-#     pos_to_state = {}
+# Combine data from sensors into a single buffer in order to feed into the model
+def _build_position_map():
+    """
+    Build a mapping: position string -> State
+    using the configured QuaternionSensors and NormalSensors.
+    """
+    pos_to_state = {}
 
-#     # Both lists contain (name, st)
-#     for name, st in QuaternionSensors + NormalSensors:
-#         mac = normalize_mac(st.device.address)
-#         pos = POSITION_BY_MAC.get(mac)  # e.g., "Chest-right:QUAT"
-#         if pos:
-#             pos_to_state[pos] = st
+    # Both lists contain (name, st)
+    for name, st in QuaternionSensors + NormalSensors:
+        mac = normalize_mac(st.device.address)
+        pos = POSITION_BY_MAC.get(mac)  # e.g., "Chest-right:QUAT"
+        if pos:
+            pos_to_state[pos] = st
 
-#     return pos_to_state
+    return pos_to_state
 
 
 def CombineData():
     global offset
 
     # Map "Chest-right:QUAT", "Arm-left:ACC/GYRO", etc. -> State
-    # pos_to_state = _build_position_map()
+    pos_to_state = _build_position_map()
 
     data = []
 
-    for name, st in QuaternionSensors:
-        # --- QUATERNIONS ---
-        if len(st.quat_deque) > 0:
-            w1, x1, y1, z1 = st.quat_deque.popleft()
-        else:
-            w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
+    for kind, pos in FEATURE_ORDER:
+        st = pos_to_state.get(pos)
 
-        data += [w1, x1, y1, z1]
+        if kind == "quat":
+            # --- QUATERNIONS ---
+            if len(st.quat_deque) > 0:
+                w1, x1, y1, z1 = st.quat_deque.popleft()
+            else:
+                w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
 
-    for name, st in NormalSensors:
-        # --- ACC ---
-        if len(st.acc_deque) > 0:
-            ax1, ay1, az1 = st.acc_deque.popleft()
-        else:
-            ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
+            data += [w1, x1, y1, z1]
 
-        # --- GYRO ---
-        if len(st.gyro_deque) > 0:
-            gx1, gy1, gz1 = st.gyro_deque.popleft()
-        else:
-            gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
+        elif kind == "normal":
+            # --- ACC ---
+            if len(st.acc_deque) > 0:
+                ax1, ay1, az1 = st.acc_deque.popleft()
+            else:
+                ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
 
-        data += [
-            ax1, ay1, az1,
-            gx1, gy1, gz1
-        ]
-    # for kind, pos in FEATURE_ORDER:
-    #     st = pos_to_state.get(pos)
+            # --- GYRO ---
+            if len(st.gyro_deque) > 0:
+                gx1, gy1, gz1 = st.gyro_deque.popleft()
+            else:
+                gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
 
-    #     if kind == "quat":
-    #         # --- QUATERNIONS ---
-    #         if len(st.quat_deque) > 0:
-    #             w1, x1, y1, z1 = st.quat_deque.popleft()
-    #         else:
-    #             w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
-
-    #         data += [w1, x1, y1, z1]
-
-    #     elif kind == "normal":
-    #         # --- ACC ---
-    #         if len(st.acc_deque) > 0:
-    #             ax1, ay1, az1 = st.acc_deque.popleft()
-    #         else:
-    #             ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
-
-    #         # --- GYRO ---
-    #         if len(st.gyro_deque) > 0:
-    #             gx1, gy1, gz1 = st.gyro_deque.popleft()
-    #         else:
-    #             gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
-
-    #         data += [
-    #             ax1, ay1, az1,
-    #             gx1, gy1, gz1
-    #         ]
+            data += [
+                ax1, ay1, az1,
+                gx1, gy1, gz1
+            ]
 
     if offset < 50:
         offset +=1
