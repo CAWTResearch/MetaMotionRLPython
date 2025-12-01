@@ -1375,14 +1375,6 @@ def CombineData():
     for kind, pos in FEATURE_ORDER:
         st = pos_to_state.get(pos)
 
-        if st is None:
-            # Sensor for this position isn't connected / mapped; pad with zeros
-            if kind == "quat":
-                data += [0.0, 0.0, 0.0, 0.0]
-            else:  # "normal" = acc(3) + gyro(3)
-                data += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-            continue
-
         if kind == "quat":
             # --- QUATERNIONS ---
             if len(st.quat_deque) > 0:
