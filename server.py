@@ -88,6 +88,16 @@ ROLE_BY_POSITION = { # Mapping of sensor positions to their roles
     'Head:QUAT':    'quat',
 }
 
+FEATURE_ORDER = [
+    ("quat",   "Chest-right:QUAT"),     # q_chest
+    ("quat",   "Arm-left:QUAT"),        # q_left_hand
+    ("quat",   "Knee-right:QUAT"),      # q_right_knee
+
+    ("normal", "Chest-left:ACC/GYRO"),  # n_chest
+    ("normal", "Knee-left:ACC/GYRO"),   # n_left_knee
+    ("normal", "Arm-right:ACC/GYRO"),   # n_right_hand
+]
+
 OLD_SENSORS = { # List of old sensor MAC addresses to change set up accordingly
     "F1:1E:E2:6F:1D:E1",
     "EE:1B:72:FA:BF:E8",
@@ -1337,39 +1347,69 @@ class CNN_LSTM_Sensor(nn.Module):
         return self.fc(x)
 
 # Combine data from sensors into a single buffer in order to feed into the model
+def _build_position_map():
+    """
+    Build a mapping: position string -> State
+    using the configured QuaternionSensors and NormalSensors.
+    """
+    pos_to_state = {}
+
+    # Both lists contain (name, st)
+    for name, st in QuaternionSensors + NormalSensors:
+        mac = normalize_mac(st.device.address)
+        pos = POSITION_BY_MAC.get(mac)  # e.g., "Chest-right:QUAT"
+        if pos:
+            pos_to_state[pos] = st
+
+    return pos_to_state
+
+
 def CombineData():
-    data = []   
-     
-     # --- QUATERNIONS ---
-    
-    for name, st in QuaternionSensors:
-        # --- QUAT ---
-        if len(st.quat_deque) >0:
-                w1, x1, y1, z1 = st.quat_deque.popleft()
-        else:
-            w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
-
-        data += [w1, x1, y1, z1]
-
-    for name, st in NormalSensors:
-        # --- ACC ---
-        if len(st.acc_deque) >0:
-            ax1, ay1, az1 = st.acc_deque.popleft()
-             
-        else:
-            ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
-            
-        # --- GYRO ---    
-        if len(st.gyro_deque) > 0:
-            gx1, gy1, gz1 = st.gyro_deque.popleft()
-        else:
-            gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
-        # append both accel + both gyro
-        data += [
-            ax1, ay1, az1,
-            gx1, gy1, gz1
-        ]
     global offset
+
+    # Map "Chest-right:QUAT", "Arm-left:ACC/GYRO", etc. -> State
+    pos_to_state = _build_position_map()
+
+    data = []
+
+    for kind, pos in FEATURE_ORDER:
+        st = pos_to_state.get(pos)
+
+        if st is None:
+            # Sensor for this position isn't connected / mapped; pad with zeros
+            if kind == "quat":
+                data += [0.0, 0.0, 0.0, 0.0]
+            else:  # "normal" = acc(3) + gyro(3)
+                data += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            continue
+
+        if kind == "quat":
+            # --- QUATERNIONS ---
+            if len(st.quat_deque) > 0:
+                w1, x1, y1, z1 = st.quat_deque.popleft()
+            else:
+                w1, x1, y1, z1 = st.quat_W, st.quat_X, st.quat_Y, st.quat_Z
+
+            data += [w1, x1, y1, z1]
+
+        elif kind == "normal":
+            # --- ACC ---
+            if len(st.acc_deque) > 0:
+                ax1, ay1, az1 = st.acc_deque.popleft()
+            else:
+                ax1, ay1, az1 = st.acc_X, st.acc_Y, st.acc_Z
+
+            # --- GYRO ---
+            if len(st.gyro_deque) > 0:
+                gx1, gy1, gz1 = st.gyro_deque.popleft()
+            else:
+                gx1, gy1, gz1 = st.gyro_X, st.gyro_Y, st.gyro_Z
+
+            data += [
+                ax1, ay1, az1,
+                gx1, gy1, gz1
+            ]
+
     if offset < 50:
         offset +=1
         return
