@@ -28,76 +28,6 @@ import ctypes
 from time import sleep
 import shlex
 
-
-from googleapiclient.discovery import build
-from google.oauth2 import service_account
-from googleapiclient.http import MediaFileUpload
-from pathlib import Path
-
-SCOPES = ['https://www.googleapis.com/auth/drive'] # Will probably be deleted after testing
-SERVICE_ACCOUNT_FILE = 'DriveUpload/service_account.json'
-
-
-ParentFolder = "RealTimeTesting Predictions" # Will probably be deleted after testing
-
-folders_ID = {"Yahid": "1BVlVORstArc-x2uptACGK1vqFcks5SCW",  # Will probably be deleted after testing
-              "Angel": "18KIELRL5BBtaBpIirm9wc1DhOnkM3W8B",
-              "RealTimeTesting Predictions": "1gkEMBR54HxqMs806p1jvURIYh7wUjzwj",
-              "CAWT_DATA": "16DwleohuGulUcZ0tjZHkda0lFqkJ6e7l"
-              }
-
-PARENT_FOLDER_ID = folders_ID[ParentFolder] # Will probably be deleted after testing
-
-LOCAL_DIR = Path("DriveUpload")  # Will probably be deleted after testing
-DEFAULT_SUBFOLDER_NAME = f"upload_{datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}" # Will probably be deleted after testing
-
-def authenticate(): # Will probably be deleted after testing
-    creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return creds
-
-def create_subfolder(service, name, parent_id): # Will probably be deleted after testing
-    file_metadata = {
-        'name': name,
-        'mimeType': 'application/vnd.google-apps.folder',
-        'parents': [parent_id]
-    }
-    folder = service.files().create(body=file_metadata, fields='id').execute()
-    return folder.get('id')
-
-def upload_file(service, file_path, folder_id): # Will probably be deleted after testing
-    file_metadata = {'name': Path(file_path).name, 'parents': [folder_id]}
-    media = MediaFileUpload(str(file_path), mimetype='text/csv', resumable=False)
-
-    service.files().create(
-        body=file_metadata,
-        media_body=media,
-        fields='id'
-    ).execute()
-
-
-def upload_all_files(subfolder_name: str = DEFAULT_SUBFOLDER_NAME, local_dir: Path = LOCAL_DIR): # Will probably be deleted after testing
-    if not local_dir.exists():
-        raise FileNotFoundError(f"Local folder not found: {local_dir.resolve()}")
-    
-    csvs = sorted([p for p in local_dir.glob("*.csv") if p.is_file()])
-    if not csvs:
-        print(f"No CSV files found in {local_dir.resolve()}")
-        return
-    
-    creds = authenticate()
-    service = build('drive', 'v3', credentials=creds)
-
-    if not subfolder_name in folders_ID:
-        subfolder_id = create_subfolder(service, subfolder_name, PARENT_FOLDER_ID)
-        folders_ID[subfolder_name] = subfolder_id
-    
-
-    subfolder_id = folders_ID[subfolder_name]
-
-    # Upload files to the new subfolder
-    for csv in csvs:
-        upload_file(service, csv, subfolder_id)
-
 CONNECTED: Set[WebSocketServerProtocol] = set()
 WS_LOOP: Optional[asyncio.AbstractEventLoop] = None
 CalibrationDataP = ctypes.POINTER(CalibrationData)
@@ -1155,8 +1085,21 @@ def configure_sensors(states_list: List["State"],
             cfg_quats += 1
         else:
             print(f"Skipping {mac}: not present in mapping.")
+    # Sort sensors by position for consistent ordering
+    pos_index = {pos: i for i, pos in enumerate(POSITIONS)}
+
+    def _sensor_pos_key(entry):
+        name, st = entry
+        mac = normalize_mac(st.device.address)
+        pos = POSITION_BY_MAC.get(mac)  # mac -> "Chest-left:ACC/GYRO", etc.
+        # Unknown positions go to the end
+        return pos_index.get(pos, 10**6)
+
+    QuaternionSensors.sort(key=_sensor_pos_key)
+    NormalSensors.sort(key=_sensor_pos_key)
 
     print(f"{len(states_list)} states; configured {cfg_normals} normals + {cfg_quats} quats")
+
 
 # Subscribe to sensor data signals once streaming starts
 def subscribe_sensors():
