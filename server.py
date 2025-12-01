@@ -1375,6 +1375,14 @@ def CombineData():
     for kind, pos in FEATURE_ORDER:
         st = pos_to_state.get(pos)
 
+        if st is None:
+            # No sensor for this position; fill with zeros
+            if kind == "quat":
+                data += [0.0, 0.0, 0.0, 0.0]
+            elif kind == "normal":
+                data += [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+            continue
+
         if kind == "quat":
             # --- QUATERNIONS ---
             if len(st.quat_deque) > 0:
