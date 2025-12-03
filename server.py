@@ -199,7 +199,7 @@ def detect_dongle_macs() -> List[str]:
     return ordered
 
 # Patterns to identify MetaWear/MetaMotion devices
-META_PATTERNS = ("METAMOTION", "METAWEAR", "MMS", "MMR", "MTR")
+META_PATTERNS = ("METAMOTION", "METAWEAR", "MMS", "MMR", "MTR", "(")
 
 # Run a bluetoothctl command and return its output
 def _btctl(cmd: str) -> str:
