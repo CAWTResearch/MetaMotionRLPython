@@ -968,7 +968,7 @@ def assign_sensors_to_dongles(devices, dongles):
     return assign
 
 # Connect to sensors using available dongles
-def connect_sensors(devices, dongles, retries=1):
+def connect_sensors(devices, dongles, retries=2):
     for dongle, devs in assign_sensors_to_dongles(devices, dongles).items():
         for mac in devs:
             for _ in range(retries):
